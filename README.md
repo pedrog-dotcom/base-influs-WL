@@ -1,6 +1,6 @@
 # Base Influencers WL (Voy BR)
 
-> Repositório **Base-Influencers-WL**. Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos da Irís (Supabase), vendas e medicação do lake (Nekt) e funil do Mixpanel (Nekt), em uma linha por **Data x Cupom**.
+> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos da Irís (Supabase), vendas e medicação do lake (Nekt) e funil do Mixpanel (Nekt), em uma linha por **Data x Cupom**.
 
 ## Saída: aba `BASE_INFLUENCERS_WL`
 
@@ -76,7 +76,7 @@ switch_bands:  [{"from": 1, "cents": 40000}]
 
 ```
 Irís (Supabase) ----------------------------+
-Nekt-brazil (lake) --> orders/discounts ----+--> Base-Influencers-WL --> aba BASE_INFLUENCERS_WL
+Nekt-brazil (lake) --> orders/discounts ----+--> base-influs-WL      --> aba BASE_INFLUENCERS_WL
 Mixpanel --> Nekt mixpanel_events ----------+
 ```
 
