@@ -42,10 +42,12 @@ function custoFixo_(iris, acc, iniISO, fimISO) {
   if (CFG.FIXO_MODO === 'DIARIZADO') {
     iris.contratos.forEach(function (c) {
       var cupom = iris.refPorInfluencer[c.influencer_id];
-      if (!cupom || !c.starts_on) return;
+      if (!cupom || !c.starts_on || CFG.CUPONS_IGNORAR.indexOf(cupom) >= 0) return;
       var ciclos = ciclosPorContrato[c.id] || {};
       var statusOk = CFG.FIXO_STATUS_CONTRATO.indexOf(c.status) >= 0;
-      var fimContrato = c.ends_on || fimISO;
+      // Contrato sem fim: o mês corrente vai até o último dia do mês (não até ontem),
+      // senão o fixo mensal inteiro cairia nos dias já decorridos.
+      var fimContrato = c.ends_on || '9999-12-31';
       for (var m = inicioMes_(c.starts_on); m <= inicioMes_(minIso_(fimContrato, fimISO)); m = somaDias_(fimMes_(m), 1)) {
         var ciclo = ciclos[m];
         if (!statusOk && !ciclo) continue;

@@ -40,6 +40,7 @@ var CFG = {
   // Peças com valor próprio (unit_value_cents) entram sempre na data de publicação.
   FIXO_MODO: 'DIARIZADO',
   FIXO_STATUS_CONTRATO: ['active', 'ended'],   // paused só entra nos meses com ciclo aberto
+  CUPONS_IGNORAR: ['CUPOMTESTE', 'TEESTE'],     // cadastros de teste na Irís
 
   // Comissão (sale_bands de contract_terms) e campanhas (commission_campaigns):
   //   COMISSAO_JANELA 'IRIS'     = igual ao calcular_pagamento: começa na 1ª peça publicada
