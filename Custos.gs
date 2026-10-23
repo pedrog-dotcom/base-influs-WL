@@ -39,6 +39,51 @@ function custoFixo_(iris, acc, iniISO, fimISO) {
     (ciclosPorContrato[cy.contract_id] = ciclosPorContrato[cy.contract_id] || {})[String(cy.reference_month).slice(0, 10)] = cy;
   });
 
+  function mensalNoMes(c, m, ciclo) {
+    var a = maxIso_(m, c.starts_on);
+    var t = termosNaData_(iris, c.id, a) || termosNaData_(iris, c.id, minIso_(fimMes_(m), c.ends_on || fimMes_(m)));
+    return t ? Number(t.fixed_monthly_cents)
+      : (ciclo && ciclo.contract_monthly_fixed_cents_snapshot != null ? Number(ciclo.contract_monthly_fixed_cents_snapshot)
+      : Number(c.monthly_fixed_cents || 0));
+  }
+
+  if (CFG.FIXO_MODO === 'CONTRATO') {
+    // Metodologia do Control Tower: valor total do contrato dividido igualmente por todos os
+    // dias do contrato (início e fim inclusivos). Valor total = soma do fixo mensal de cada mês
+    // que o contrato toca (mês iniciado conta inteiro, como o ciclo da Irís).
+    // Contrato sem data de fim não tem total: usa fixo mensal / dias do mês calendário
+    // (diário constante dentro do mês, sem concentrar o mês nos dias decorridos).
+    iris.contratos.forEach(function (c) {
+      var cupom = iris.refPorInfluencer[c.influencer_id];
+      if (!cupom || !c.starts_on || CFG.CUPONS_IGNORAR.indexOf(cupom) >= 0) return;
+      var ciclos = ciclosPorContrato[c.id] || {};
+      var statusOk = CFG.FIXO_STATUS_CONTRATO.indexOf(c.status) >= 0;
+      var m, d;
+      if (c.ends_on) {
+        if (!statusOk) return;
+        var total = 0;
+        for (m = inicioMes_(c.starts_on); m <= inicioMes_(c.ends_on); m = somaDias_(fimMes_(m), 1)) {
+          total += mensalNoMes(c, m, ciclos[m]);
+        }
+        if (!total) return;
+        var diario = total / 100 / diasEntre_(c.starts_on, c.ends_on);
+        for (d = maxIso_(c.starts_on, iniISO); d <= minIso_(c.ends_on, fimISO); d = somaDias_(d, 1)) {
+          accAdd_(acc, d, cupom, 'fixo', diario);
+        }
+      } else {
+        for (m = inicioMes_(c.starts_on); m <= inicioMes_(fimISO); m = somaDias_(fimMes_(m), 1)) {
+          if (!statusOk && !ciclos[m]) continue;
+          var cent = mensalNoMes(c, m, ciclos[m]);
+          if (!cent) continue;
+          var dia = cent / 100 / diasNoMes_(m);
+          for (d = maxIso_(maxIso_(m, c.starts_on), iniISO); d <= minIso_(fimMes_(m), fimISO); d = somaDias_(d, 1)) {
+            accAdd_(acc, d, cupom, 'fixo', dia);
+          }
+        }
+      }
+    });
+  }
+
   if (CFG.FIXO_MODO === 'DIARIZADO') {
     iris.contratos.forEach(function (c) {
       var cupom = iris.refPorInfluencer[c.influencer_id];

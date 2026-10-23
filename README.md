@@ -8,7 +8,7 @@
 |---|---|
 | Data | Data em Brasília (checkout para vendas, 1º passo da sessão para funil, dia de competência para custos) |
 | Cupom | `promotion_coupon_code` do lake = `utm_campaign` do Mixpanel = `referral_code` da Irís, em maiúsculas |
-| Custo fixo | Irís: `contract_terms_ranges.fixed_monthly_cents` (fallback: snapshot do ciclo e `contracts.monthly_fixed_cents`), diarizado pelos dias de contrato ativos no mês. Peças com `unit_value_cents` entram na data de publicação. `FIXO_MODO = 'PECA'` troca pelo rateio por peça entregue (regra de pagamento) |
+| Custo fixo | Irís, metodologia do Control Tower (`FIXO_MODO = 'CONTRATO'`): valor total do contrato dividido igualmente por todos os dias do contrato. Valor total = soma do fixo mensal (`contract_terms_ranges`) de cada mês que o contrato toca. Contrato sem data de fim: fixo mensal / dias do mês. Peças com `unit_value_cents` entram na data de publicação. Alternativas: `'DIARIZADO'` (fixo do mês / dias ativos no mês) e `'PECA'` (regra de pagamento) |
 | Custo de comissão | Irís: `sale_bands` dos termos vigentes, por ordinal de venda no mês (`tier_counter_scope`), aplicado às vendas pagas da Nekt. Mesma lógica do `calcular_pagamento` |
 | Custo de plataformas | Aba `INPUT_PLATAFORMAS` (manual): valor diário ou mensal / dias do mês, do início até o fim (vazio = fim do mês). Sem cupom vai para `(GERAL)` |
 | Custo de medicação | Nekt: gross revenue de todas as orders confirmadas dos clientes cuja order de aquisição usou `voy_br_influvoy_4_99off` ou `voy_br_influvoy_99`. Linha `(MEDICACAO INFLUVOY)` |

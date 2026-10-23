@@ -34,11 +34,14 @@ var CFG = {
   CUPOM_GERAL: '(GERAL)',
 
   // Custo fixo:
-  //   'DIARIZADO' = fixo mensal do contrato dividido pelos dias de contrato ativos no mês
+  //   'CONTRATO'  = metodologia do Control Tower (padrão): valor total do contrato dividido
+  //                 igualmente por todos os dias do contrato. Total = soma do fixo mensal de
+  //                 cada mês que o contrato toca. Sem data de fim: fixo mensal / dias do mês.
+  //   'DIARIZADO' = fixo mensal dividido pelos dias de contrato ativos em cada mês
   //   'PECA'      = regra de pagamento da Irís: fixo / peças do ciclo, reconhecido na data
   //                 de publicação de cada peça entregue (hoje quase todas estão 'sem_data')
   // Peças com valor próprio (unit_value_cents) entram sempre na data de publicação.
-  FIXO_MODO: 'DIARIZADO',
+  FIXO_MODO: 'CONTRATO',
   FIXO_STATUS_CONTRATO: ['active', 'ended'],   // paused só entra nos meses com ciclo aberto
   CUPONS_IGNORAR: ['CUPOMTESTE', 'TEESTE'],     // cadastros de teste na Irís
 
