@@ -19,9 +19,12 @@ function onOpen() {
 /** Confere Supabase e Nekt com consultas pequenas. */
 function debugConexoes() {
   var cat = sbSelect_('categories', 'slug');
+  var contratos = sbSelect_('contracts', 'id');
   var n = nektSql_("SELECT COUNT(*) AS n FROM `manual_default`.`webhook_v2_order_discounts_lake` WHERE promotion_code IN (" + sqlList_(CFG.PROMO_INFLUENCER) + ")");
-  var msg = 'Supabase OK (' + cat.length + ' categorias). Nekt OK (' + n[0].n + ' linhas de desconto de influenciador).';
-  logar_('DEBUG', 'ok', 0, msg);
+  var sbOk = cat.length > 0 && contratos.length > 0;
+  var msg = (sbOk ? 'Supabase OK' : 'Supabase SEM DADOS: a chave em SUPABASE_SERVICE_KEY não lê as tabelas (RLS). Use a service_role / sb_secret_, não a anon / sb_publishable_') +
+    ' (' + cat.length + ' categorias, ' + contratos.length + ' contratos). Nekt OK (' + n[0].n + ' linhas de desconto de influenciador).';
+  logar_('DEBUG', sbOk ? 'ok' : 'erro', 0, msg);
   try { SpreadsheetApp.getUi().alert(msg); } catch (e) { console.log(msg); }
 }
 
