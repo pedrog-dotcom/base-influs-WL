@@ -20,7 +20,11 @@ function executarDiario() {
   });
 }
 
-function atualizarBase() { comLock_(atualizarBase_); }
+function atualizarBase() {
+  comLock_(function () {
+    try { atualizarBase_(); } catch (e) { logar_('BASE', 'erro', 0, e); throw e; }
+  });
+}
 function atualizarFunilIncremental() { comLock_(atualizarFunilIncremental_); }
 
 /* =========================================================================
@@ -93,24 +97,48 @@ function escreverConteudos_(linhas) {
   });
 }
 
-/** Substitui o conteúdo de uma aba (cabeçalho fixo + linhas com data ISO na 1ª coluna). */
+var ESCRITA_LOTE = 2000;   // linhas por setValues
+
+/** Data ISO (yyyy-mm-dd) -> número de série do Sheets (dias desde 30/12/1899), sem objeto Date. */
+function serialSheets_(iso) {
+  var p = String(iso).slice(0, 10).split('-');
+  var ms = Date.UTC(+p[0], +p[1] - 1, +p[2]);
+  if (isNaN(ms)) throw new Error('Data inválida na base: "' + iso + '"');
+  return (ms - Date.UTC(1899, 11, 30)) / 86400000;
+}
+
+/**
+ * Substitui o conteúdo de uma aba (cabeçalho fixo + linhas com data ISO na 1ª coluna).
+ * A data vai como número de série com formato dd/MM/yyyy (não como objeto Date), a área de
+ * dados é limpa com valores e formatos, a escrita é em lotes e, no fim, confere se nenhuma
+ * linha ficou sem data.
+ */
 function escreverAba_(nome, cols, linhas, formatar) {
   var sh = aba_(nome, cols);
   var n = cols.length;
   if (sh.getMaxColumns() < n) sh.insertColumnsAfter(sh.getMaxColumns(), n - sh.getMaxColumns());
-  if (sh.getMaxRows() > 1) sh.getRange(2, 1, sh.getMaxRows() - 1, Math.max(n, sh.getLastColumn())).clearContent();
+  var largura = Math.max(n, sh.getLastColumn());
+  if (sh.getMaxRows() > 1) sh.getRange(2, 1, sh.getMaxRows() - 1, largura).clear();   // valores e formatos
   if (sh.getLastColumn() > n) sh.getRange(1, n + 1, 1, sh.getLastColumn() - n).clearContent();
   if (linhas.length) {
     var valores = linhas.map(function (l) {
-      var p = l[0].split('-');
       var out = l.slice();
-      out[0] = new Date(+p[0], +p[1] - 1, +p[2]);
+      out[0] = serialSheets_(l[0]);
       return out;
     });
     if (sh.getMaxRows() < valores.length + 1) sh.insertRowsAfter(sh.getMaxRows(), valores.length + 1 - sh.getMaxRows());
-    sh.getRange(2, 1, valores.length, n).setValues(valores);
+    for (var i = 0; i < valores.length; i += ESCRITA_LOTE) {
+      var lote = valores.slice(i, i + ESCRITA_LOTE);
+      sh.getRange(2 + i, 1, lote.length, n).setValues(lote);
+      SpreadsheetApp.flush();
+    }
     sh.getRange(2, 1, valores.length, 1).setNumberFormat('dd/MM/yyyy');
     if (formatar) formatar(sh, valores.length);
+    SpreadsheetApp.flush();
+
+    var semData = sh.getRange(2, 1, valores.length, 1).getValues()
+      .filter(function (r) { return r[0] === '' || r[0] === null; }).length;
+    if (semData) throw new Error(nome + ': ' + semData + ' de ' + valores.length + ' linhas ficaram sem data após a escrita.');
   }
   sh.setFrozenRows(1);
 }
