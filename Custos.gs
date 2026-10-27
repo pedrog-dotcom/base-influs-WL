@@ -1,5 +1,5 @@
 /****************************************************************************************
- * Custos.gs: custo fixo, comissão, campanha e plataformas, em R$ por dia e cupom.
+ * Custos.gs: custo fixo, comissão e campanha de incentivo, em R$ por dia e cupom.
  *
  * Entrada "iris" (montada em Iris.gs a partir do Supabase):
  *   { refPorInfluencer: {influencer_id: CUPOM}, influencerPorRef: {CUPOM: influencer_id},
@@ -215,24 +215,5 @@ function comissaoECampanha_(iris, vendas, acc, iniISO, fimISO) {
       }
       if (grava && extra) accAdd_(acc, v.data, v.cupom, 'campanha', extra / 100);
     });
-  });
-}
-
-/* ---------------- plataformas (aba INPUT_PLATAFORMAS) ---------------- */
-
-/**
- * linhas: [{plataforma, cupom, inicio, fim, mensal, diario}]
- * Custo diário = "Valor diário" se preenchido; senão "Valor mensal" / dias do mês.
- * Vai do início até o fim informado (vazio = fim do mês do início), como no Cost - Extra.
- */
-function custoPlataformas_(linhas, acc, iniISO, fimISO) {
-  linhas.forEach(function (l) {
-    if (!l.inicio || (!l.mensal && !l.diario)) return;
-    var cupom = normCupom_(l.cupom) || CFG.CUPOM_GERAL;
-    var fim = l.fim || fimMes_(l.inicio);
-    for (var d = maxIso_(l.inicio, iniISO); d <= minIso_(fim, fimISO); d = somaDias_(d, 1)) {
-      var v = l.diario ? Number(l.diario) : Number(l.mensal) / diasNoMes_(d);
-      accAdd_(acc, d, cupom, 'plataformas', v);
-    }
   });
 }

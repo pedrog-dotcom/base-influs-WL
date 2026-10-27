@@ -1,22 +1,23 @@
 # Base Influencers WL (Voy BR)
 
-> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos da Irís (Supabase), vendas e medicação do lake (Nekt) e funil do Mixpanel (Nekt), em uma linha por **Data x Cupom**.
+> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos e conteúdos da Irís (Supabase), vendas do lake (Nekt) e funil do Mixpanel (Nekt), em uma linha por **Data x Cupom**.
 
 ## Saída: aba `BASE_INFLUENCERS_WL`
 
 | Coluna | Fonte e regra |
 |---|---|
-| Data | Data em Brasília (checkout para vendas, 1º passo da sessão para funil, dia de competência para custos) |
+| Data | Data em Brasília: checkout para Orders, conclusão do pagamento para Acquisitions, 1º passo da sessão para funil, publicação para conteúdos, dia de competência para custos |
 | Cupom | `promotion_coupon_code` do lake = `utm_campaign` do Mixpanel = `referral_code` da Irís, em maiúsculas |
 | Custo fixo | Irís, metodologia do Control Tower (`FIXO_MODO = 'CONTRATO'`): valor total do contrato dividido igualmente por todos os dias do contrato. Valor total = soma do fixo mensal (`contract_terms_ranges`) de cada mês que o contrato toca. Contrato sem data de fim: fixo mensal / dias do mês. Peças com `unit_value_cents` entram na data de publicação. Alternativas: `'DIARIZADO'` (fixo do mês / dias ativos no mês) e `'PECA'` (regra de pagamento) |
 | Custo de comissão | Irís: `sale_bands` dos termos vigentes, por ordinal de venda no mês (`tier_counter_scope`), aplicado às vendas pagas da Nekt. Mesma lógica do `calcular_pagamento` |
-| Custo de plataformas | Aba `INPUT_PLATAFORMAS` (manual): valor diário ou mensal / dias do mês, do início até o fim (vazio = fim do mês). Sem cupom vai para `(GERAL)` |
-| Custo de medicação | Nekt: gross revenue de todas as orders confirmadas dos clientes cuja order de aquisição usou `voy_br_influvoy_4_99off` ou `voy_br_influvoy_99`. Linha `(MEDICACAO INFLUVOY)` |
-| Custo de campanha | Irís: `commission_campaigns` ativas (`bonus_por_venda`, `bonus_meta`, `troca_faixa`: a diferença sobre a faixa padrão) |
-| Custo total | Soma dos cinco custos |
+| Custo de campanha de incentivo | Irís: `commission_campaigns` ativas (`bonus_por_venda`, `bonus_meta`, `troca_faixa`: a diferença sobre a faixa padrão) |
+| Custo total | Custo fixo + comissão + campanha de incentivo |
 | Sessões / Quest started / Recommendations / Checkout started | Mixpanel bruto (`manual_default.mixpanel_events`), réplica do board "Voy Saude BR Full funnel": sessões com Loaded a Page (topo de funil) → Questionnaire Started → Recommendations Loaded / Checkout Started na mesma sessão; filtro last touch `utm_source` in (influencer, Influencers), breakdown por `utm_campaign` |
-| Orders | Nekt: pedidos Voy/Brazil com `promotion_code = voy_br_coupon_15_influencer` (todos os contextos, confirmados ou não), mesma regra do SQL do lake |
-| Acquisitions | Orders com `order_context = 'acquisition'` e `is_confirmed` |
+| Orders | Nekt, regra do SQL do pace: pedidos Voy/Brazil com `promotion_code = voy_br_coupon_15_influencer`, todos os contextos e status, na data do checkout. Creators híbridas (`CUPONS_HIBRIDOS`: ISAVOY, CARINAVOY/CARINA40) entram com qualquer promotion code |
+| Acquisitions | Mesmos pedidos, só os confirmados (`is_confirmed`, qualquer `order_context`), na data de conclusão do pagamento |
+| Total de conteúdos | Irís, `content_pieces` com status `entregue` e não canceladas, na data de publicação |
+| Reels, Feed, Stories, Transmissão IG, Vídeo TikTok, Vídeo YouTube, Shorts, Inserção YouTube, Live YouTube, Inserção Twitch, Envio WhatsApp, Episódio podcast, Outros formatos | Uma coluna por formato da Irís (`content_pieces.format`), mapeamento em `CFG.FORMATOS` |
+| Plataforma Instagram, TikTok, YouTube, Twitch, WhatsApp, Podcast, Outras | Soma dos formatos de cada plataforma |
 
 Valores com precisão cheia; arredondamento só no formato de exibição.
 
@@ -24,9 +25,10 @@ Valores com precisão cheia; arredondamento só no formato de exibição.
 
 - **Config.gs**: parâmetros (datas, promo codes, modos de fixo e comissão, regras do funil, abas)
 - **Clients.gs**: Supabase via PostgREST (paginado) e Nekt via MCP `execute_sql` (mesmo cliente do CRM-WL)
-- **Sql.gs**: SQLs da Nekt (vendas, medicação, funil)
+- **Sql.gs**: SQLs da Nekt (vendas e funil)
 - **Iris.gs**: leitura das tabelas da Irís filtradas para `weight_loss`
-- **Custos.gs**: fixo, comissão, campanha e plataformas (lógica pura, testável fora do Apps Script)
+- **Custos.gs**: fixo, comissão e campanha de incentivo (lógica pura, testável fora do Apps Script)
+- **Conteudos.gs**: contagem de conteúdos por formato e plataforma
 - **Util.gs**: datas ISO e acumulador
 - **Base.gs**: orquestração, cache do funil, backfill, log, alerta e gatilho
 - **Menu.gs**: menu "Base Influencers" e diagnósticos
@@ -61,7 +63,8 @@ switch_bands:  [{"from": 1, "cents": 40000}]
 - **Vendas da comissão**: pedidos com pagamento concluído (`payment_completed_at`), 1 unidade por pedido, contados pela ordem do checkout. A Irís usa a própria sincronização (`attributed_sales`), que hoje registra menos pedidos que o lake (ex.: out/26: 339 na Irís x 457 pagos no lake), porque só casa cupons de influenciadoras com contrato. A base segue o lake.
 - **troca_faixa**: o ordinal da campanha conta só vendas dentro do período da campanha.
 - **Custo fixo diarizado** cobre contratos `active`/`ended` em todos os meses do contrato e `paused` só nos meses com ciclo aberto. Pode diferir do pago quando há peças glosadas.
-- **Medicação** não tem cupom de influenciadora: os cupons INFLUVOY são aleatórios por cliente, então o custo fica na linha `(MEDICACAO INFLUVOY)`.
+- **Diferença para o pace (Influencers - PACING V3)**: no pace, a lista Cupom → Cupom principal da aba `Mapeamento` está com `#REF!`, então só ~13 cupons recebem Orders/Acquisitions (out/26 até 26/10: 74 orders no pace x 558 no lake). Para esses cupons a base bate exatamente com o pace; a diferença está nos cupons que o pace descarta (XULIA, BORAJUNTAS, SARADA, ECS e outros).
+- **Conteúdos** dependem do preenchimento da Irís: hoje só 15 peças estão `entregue` (todas em 29/09/2026). Outros status de postagem podem entrar via `CFG.CONTEUDO_STATUS`.
 - **Funil**:
   - O filtro "Voy BR top of funnel filter for acquisitions" não é acessível pela API; a réplica usa domínio `*.voysaude.com.br` e país BR (`CFG.FUNIL`). Ajustar se o filtro tiver mais regras e conferir um dia contra o board (`debugFunilDia`).
   - Sessão = 30 min de inatividade entre os 4 eventos do funil; last touch olha só `LOOKBACK_HORAS` (24h) para trás. Usuário que voltou depois disso sem UTM não entra como influencer aqui, mas pode entrar no Mixpanel.

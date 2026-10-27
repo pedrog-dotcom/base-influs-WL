@@ -21,9 +21,12 @@ function sqlOrdersCte_() {
 }
 
 /**
- * Pedidos com o cupom de influenciador, 1 linha por pedido (mesma regra do SQL do lake:
- * Voy, Brazil, promotion_code voy_br_coupon_15_influencer, confirmados ou não).
- * A data é o checkout em horário de Brasília.
+ * Pedidos com o cupom de influenciador, 1 linha por pedido. Mesma regra do SQL do pace:
+ * Voy, Brazil, promotion_code voy_br_coupon_15_influencer, confirmados ou não. Creators
+ * híbridas (CUPONS_HIBRIDOS) entram com qualquer promotion code.
+ * data     = checkout em Brasília (Orders)
+ * data_pag = conclusão do pagamento em Brasília (Acquisitions, quando confirmado)
+ * Lê pedidos com checkout OU pagamento a partir de desdeISO.
  */
 function sqlVendasInfluencer_(desdeISO) {
   return "WITH " + sqlOrdersCte_() + ",\n" +
@@ -31,34 +34,21 @@ function sqlVendasInfluencer_(desdeISO) {
     "  SELECT order_id, UPPER(TRIM(ANY_VALUE(promotion_coupon_code))) AS cupom\n" +
     "  FROM `manual_default`.`webhook_v2_order_discounts_lake`\n" +
     "  WHERE promotion_code IN (" + sqlList_(CFG.PROMO_INFLUENCER) + ")\n" +
+    "     OR UPPER(TRIM(promotion_coupon_code)) IN (" + sqlList_(CFG.CUPONS_HIBRIDOS.map(normCupom_)) + ")\n" +
     "  GROUP BY order_id\n" +
     ")\n" +
     "SELECT o.order_id, o.order_number, d.cupom,\n" +
     "  FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(o.system_checkout_at), 'America/Sao_Paulo')) AS data,\n" +
+    "  IF(NULLIF(o.payment_completed_at, '') IS NULL, NULL,\n" +
+    "     FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(o.payment_completed_at), 'America/Sao_Paulo'))) AS data_pag,\n" +
     "  FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP(o.system_checkout_at)) AS checkout_utc,\n" +
-    "  o.order_context, CAST(o.is_confirmed AS STRING) AS is_confirmed,\n" +
-    "  CAST(NULLIF(o.payment_completed_at, '') IS NOT NULL AS STRING) AS pago,\n" +
-    "  o.gross_revenue_local\n" +
+    "  CAST(o.is_confirmed AS STRING) AS is_confirmed\n" +
     "FROM disc d JOIN orders o USING (order_id)\n" +
     "WHERE NULLIF(o.system_checkout_at, '') IS NOT NULL\n" +
-    "  AND DATE(TIMESTAMP(o.system_checkout_at), 'America/Sao_Paulo') >= DATE '" + desdeISO + "'\n" +
+    "  AND (DATE(TIMESTAMP(o.system_checkout_at), 'America/Sao_Paulo') >= DATE '" + desdeISO + "'\n" +
+    "       OR (NULLIF(o.payment_completed_at, '') IS NOT NULL\n" +
+    "           AND DATE(TIMESTAMP(o.payment_completed_at), 'America/Sao_Paulo') >= DATE '" + desdeISO + "'))\n" +
     "ORDER BY o.system_checkout_at, o.order_number";
-}
-
-/** Custo de medicação por dia: gross revenue das orders confirmadas dos clientes adquiridos com INFLUVOY. */
-function sqlMedicacao_(desdeISO) {
-  return "WITH " + sqlOrdersCte_() + ",\n" +
-    "clientes AS (\n" +
-    "  SELECT DISTINCT o.customer_id\n" +
-    "  FROM orders o JOIN `manual_default`.`webhook_v2_order_discounts_lake` d USING (order_id)\n" +
-    "  WHERE d.promotion_code IN (" + sqlList_(CFG.PROMO_MEDICACAO) + ") AND o.is_acquisition_order\n" +
-    ")\n" +
-    "SELECT FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(o.system_checkout_at), 'America/Sao_Paulo')) AS data,\n" +
-    "  SUM(o.gross_revenue_local) AS gross, COUNT(*) AS orders\n" +
-    "FROM orders o JOIN clientes c USING (customer_id)\n" +
-    "WHERE o.is_confirmed AND NULLIF(o.system_checkout_at, '') IS NOT NULL\n" +
-    "  AND DATE(TIMESTAMP(o.system_checkout_at), 'America/Sao_Paulo') >= DATE '" + desdeISO + "'\n" +
-    "GROUP BY 1 ORDER BY 1";
 }
 
 /**

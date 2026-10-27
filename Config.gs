@@ -21,17 +21,15 @@ var CFG = {
   COUNTRY: 'brazil',
   CATEGORIA_IRIS: 'weight_loss',
 
-  // Vendas de influenciador (lake via Nekt)
+  // Vendas de influenciador (lake via Nekt), mesma regra do SQL do pace:
+  //   Orders       = pedidos com o cupom, todos os status, na data do checkout
+  //   Acquisitions = pedidos confirmados (qualquer order_context), na data de conclusão do pagamento
   PROMO_INFLUENCER: ['voy_br_coupon_15_influencer'],
-
-  // Custo de medicação: gross revenue de todas as orders confirmadas de clientes cuja
-  // order de aquisição usou um destes promotion codes. Os cupons INFLUVOY são aleatórios
-  // e não apontam para a influenciadora, então o custo vai para uma linha própria.
-  PROMO_MEDICACAO: ['voy_br_influvoy_4_99off', 'voy_br_influvoy_99'],
-  CUPOM_MEDICACAO: '(MEDICACAO INFLUVOY)',
-
-  // Linha de custos sem cupom (plataformas sem cupom informado)
-  CUPOM_GERAL: '(GERAL)',
+  // Creators híbridas: entram inteiras em Influencers com qualquer promotion code
+  // (hoje vendem pelo VOY_BR_40_OFF_AFFILIATES), igual ao pace.
+  CUPONS_HIBRIDOS: ['ISAVOY', 'CARINAVOY', 'CARINA40'],
+  // Cupons alternativos somados no cupom principal
+  CUPOM_ALIAS: { 'CARINA40': 'CARINAVOY' },
 
   // Custo fixo:
   //   'CONTRATO'  = metodologia do Control Tower (padrão): valor total do contrato dividido
@@ -76,17 +74,43 @@ var CFG = {
   // Abas
   ABA_BASE: 'BASE_INFLUENCERS_WL',
   ABA_FUNIL: '_cache_funil',
-  ABA_PLATAFORMAS: 'INPUT_PLATAFORMAS',
   ABA_LOG: '_log',
 
-  // Cabeçalho da base (ordem fixa, consumida por outros scripts)
-  COLUNAS: ['Data', 'Cupom', 'Custo fixo', 'Custo de comissão', 'Custo de plataformas',
-    'Custo de medicação', 'Custo de campanha', 'Custo total', 'Sessões', 'Quest started',
-    'Recommendations', 'Checkout started', 'Orders', 'Acquisitions'],
+  // Conteúdos (Irís, content_pieces): peças entregues, na data de publicação.
+  // Uma coluna por formato e uma por plataforma, na ordem abaixo.
+  CONTEUDO_STATUS: ['entregue'],
+  FORMATOS: [
+    { id: 'reels',          coluna: 'Reels',               plataforma: 'Instagram' },
+    { id: 'feed',           coluna: 'Feed',                plataforma: 'Instagram' },
+    { id: 'stories',        coluna: 'Stories',             plataforma: 'Instagram' },
+    { id: 'ig_transmissao', coluna: 'Transmissão IG',      plataforma: 'Instagram' },
+    { id: 'tiktok',         coluna: 'Vídeo TikTok',        plataforma: 'TikTok' },
+    { id: 'youtube',        coluna: 'Vídeo YouTube',       plataforma: 'YouTube' },
+    { id: 'shorts',         coluna: 'Shorts',              plataforma: 'YouTube' },
+    { id: 'insert',         coluna: 'Inserção YouTube',    plataforma: 'YouTube' },
+    { id: 'live_yt',        coluna: 'Live YouTube',        plataforma: 'YouTube' },
+    { id: 'insert_twitch',  coluna: 'Inserção Twitch',     plataforma: 'Twitch' },
+    { id: 'whatsapp',       coluna: 'Envio WhatsApp',      plataforma: 'WhatsApp' },
+    { id: 'podcast',        coluna: 'Episódio podcast',    plataforma: 'Podcast' }
+  ],
+  FORMATO_SEM_TIPO: { coluna: 'Outros formatos', plataforma: 'Outras' },
 
   NEKT_MCP_URL: 'https://mcp.nekt.com/mcp',
   NEKT_MAX_PAGINAS: 200
 };
+
+/** Cabeçalho da base (ordem fixa, consumida por outros scripts). */
+function colunasBase_() {
+  var plataformas = [];
+  CFG.FORMATOS.concat([CFG.FORMATO_SEM_TIPO]).forEach(function (f) {
+    if (plataformas.indexOf(f.plataforma) < 0) plataformas.push(f.plataforma);
+  });
+  return ['Data', 'Cupom', 'Custo fixo', 'Custo de comissão', 'Custo de campanha de incentivo', 'Custo total',
+    'Sessões', 'Quest started', 'Recommendations', 'Checkout started', 'Orders', 'Acquisitions',
+    'Total de conteúdos']
+    .concat(CFG.FORMATOS.map(function (f) { return f.coluna; }), [CFG.FORMATO_SEM_TIPO.coluna])
+    .concat(plataformas.map(function (p) { return 'Plataforma ' + p; }));
+}
 
 function prop_(nome, obrigatoria) {
   var v = PropertiesService.getScriptProperties().getProperty(nome);

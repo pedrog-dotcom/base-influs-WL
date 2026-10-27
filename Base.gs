@@ -9,7 +9,8 @@
  *   instalarGatilhoDiario()      cria o gatilho diário (≈ 7h40)
  *
  * Granularidade: 1 linha por dia e cupom com qualquer valor diferente de zero.
- * Linhas especiais: (MEDICACAO INFLUVOY) e (GERAL) para custos sem cupom de influenciadora.
+ * Custos: fixo, comissão e campanha de incentivo (Irís). Vendas: lake via Nekt.
+ * Funil: Mixpanel via Nekt (cache). Conteúdos: peças entregues na Irís.
  ****************************************************************************************/
 
 function executarDiario() {
@@ -34,25 +35,24 @@ function atualizarBase_() {
   var iris = carregarIris_();
 
   var vendas = nektSql_(sqlVendasInfluencer_(minIso_(CFG.VENDAS_DESDE, ini))).map(function (r) {
+    var cupom = normCupom_(r.cupom);
+    cupom = CFG.CUPOM_ALIAS[cupom] || cupom;
     return {
-      order_id: r.order_id, order_number: r.order_number, cupom: normCupom_(r.cupom), data: r.data,
-      checkout_utc: r.checkout_utc, contexto: r.order_context,
-      confirmado: String(r.is_confirmed) === 'true', pago: String(r.pago) === 'true'
+      order_id: r.order_id, order_number: r.order_number, cupom: cupom, data: r.data,
+      data_pag: r.data_pag || null, checkout_utc: r.checkout_utc,
+      confirmado: String(r.is_confirmed) === 'true', pago: !!r.data_pag
     };
   });
   vendas.forEach(function (v) {
-    if (v.data < ini || v.data > fim) return;
-    accAdd_(acc, v.data, v.cupom, 'orders', 1);
-    if (v.confirmado && v.contexto === 'acquisition') accAdd_(acc, v.data, v.cupom, 'acq', 1);
-  });
-
-  nektSql_(sqlMedicacao_(ini)).forEach(function (r) {
-    if (r.data <= fim) accAdd_(acc, r.data, CFG.CUPOM_MEDICACAO, 'medicacao', Number(r.gross));
+    // Orders: todos os pedidos, na data do checkout
+    if (v.data >= ini && v.data <= fim) accAdd_(acc, v.data, v.cupom, 'orders', 1);
+    // Acquisitions: pedidos confirmados, na data de conclusão do pagamento
+    if (v.confirmado && v.data_pag && v.data_pag >= ini && v.data_pag <= fim) accAdd_(acc, v.data_pag, v.cupom, 'acq', 1);
   });
 
   custoFixo_(iris, acc, ini, fim);
   comissaoECampanha_(iris, vendas, acc, ini, fim);
-  custoPlataformas_(lerPlataformas_(), acc, ini, fim);
+  conteudos_(iris, acc, ini, fim);
 
   lerCacheFunil_().forEach(function (r) {
     if (r.data < ini || r.data > fim) return;
@@ -69,20 +69,27 @@ function atualizarBase_() {
 }
 
 function linhasDaBase_(acc) {
-  var chaves = Object.keys(acc).sort();
-  return chaves.map(function (k) {
+  var plataformas = colunasBase_().slice(13 + CFG.FORMATOS.length + 1)
+    .map(function (c) { return c.replace(/^Plataforma /, ''); });
+  var formatos = CFG.FORMATOS.map(function (f) { return f.coluna; }).concat([CFG.FORMATO_SEM_TIPO.coluna]);
+  return Object.keys(acc).sort().map(function (k) {
     var r = acc[k];
-    var total = (r.fixo || 0) + (r.comissao || 0) + (r.plataformas || 0) + (r.medicacao || 0) + (r.campanha || 0);
-    return [r.data, r.cupom, r.fixo || 0, r.comissao || 0, r.plataformas || 0, r.medicacao || 0, r.campanha || 0, total,
-      r.sessoes || 0, r.quest || 0, r.recs || 0, r.checkout || 0, r.orders || 0, r.acq || 0];
+    var total = (r.fixo || 0) + (r.comissao || 0) + (r.campanha || 0);
+    return [r.data, r.cupom, r.fixo || 0, r.comissao || 0, r.campanha || 0, total,
+      r.sessoes || 0, r.quest || 0, r.recs || 0, r.checkout || 0, r.orders || 0, r.acq || 0,
+      r.conteudos || 0]
+      .concat(formatos.map(function (c) { return r['fmt:' + c] || 0; }))
+      .concat(plataformas.map(function (p) { return r['plat:' + p] || 0; }));
   });
 }
 
 function escreverBase_(linhas) {
-  var sh = aba_(CFG.ABA_BASE, CFG.COLUNAS);
-  var n = CFG.COLUNAS.length;
+  var cols = colunasBase_();
+  var sh = aba_(CFG.ABA_BASE, cols);
+  var n = cols.length;
+  if (sh.getMaxColumns() < n) sh.insertColumnsAfter(sh.getMaxColumns(), n - sh.getMaxColumns());
   var max = sh.getMaxRows();
-  if (max > 1) sh.getRange(2, 1, max - 1, n).clearContent();
+  if (max > 1) sh.getRange(2, 1, max - 1, Math.max(n, sh.getLastColumn())).clearContent();
   if (linhas.length) {
     var valores = linhas.map(function (l) {
       var p = l[0].split('-');
@@ -93,8 +100,8 @@ function escreverBase_(linhas) {
     if (sh.getMaxRows() < valores.length + 1) sh.insertRowsAfter(sh.getMaxRows(), valores.length + 1 - sh.getMaxRows());
     sh.getRange(2, 1, valores.length, n).setValues(valores);
     sh.getRange(2, 1, valores.length, 1).setNumberFormat('dd/MM/yyyy');
-    sh.getRange(2, 3, valores.length, 6).setNumberFormat('#,##0.00');      // custos: arredonda só na exibição
-    sh.getRange(2, 9, valores.length, 6).setNumberFormat('#,##0');
+    sh.getRange(2, 3, valores.length, 4).setNumberFormat('#,##0.00');      // custos: arredonda só na exibição
+    sh.getRange(2, 7, valores.length, n - 6).setNumberFormat('#,##0');
   }
   sh.setFrozenRows(1);
 }
@@ -168,28 +175,6 @@ function backfillFunil() {
     props.deleteProperty('FUNIL_CURSOR');
     logar_('FUNIL_BACKFILL', 'ok', 0, 'Backfill concluído. Rode atualizarBase().');
   }
-}
-
-/* =========================================================================
- * Plataformas (input manual)
- * ========================================================================= */
-
-function lerPlataformas_() {
-  var cab = ['Plataforma', 'Cupom (vazio = GERAL)', 'Início', 'Fim (vazio = fim do mês)', 'Valor mensal (R$)', 'Valor diário (R$)'];
-  var sh = aba_(CFG.ABA_PLATAFORMAS, cab);
-  if (sh.getLastRow() < 2) return [];
-  var tz = CFG.TZ;
-  function iso(v) {
-    if (!v) return null;
-    if (Object.prototype.toString.call(v) === '[object Date]') return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
-    var m = String(v).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    return m ? m[3] + '-' + m[2] + '-' + m[1] : String(v).slice(0, 10);
-  }
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues()
-    .filter(function (r) { return r[0] || r[4] || r[5]; })
-    .map(function (r) {
-      return { plataforma: r[0], cupom: r[1], inicio: iso(r[2]), fim: iso(r[3]), mensal: Number(r[4]) || 0, diario: Number(r[5]) || 0 };
-    });
 }
 
 /* =========================================================================

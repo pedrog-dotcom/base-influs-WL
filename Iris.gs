@@ -36,7 +36,7 @@ function carregarIris_() {
   var idsCiclo = {};
   ciclos.forEach(function (cy) { idsCiclo[cy.id] = true; });
 
-  var pecas = sbSelect_('content_pieces', 'id,cycle_id,status,is_cancelled,published_at,delivered_at,unit_value_cents')
+  var pecas = sbSelect_('content_pieces', 'id,cycle_id,status,is_cancelled,format,published_at,delivered_at,unit_value_cents')
     .filter(function (p) { return idsCiclo[p.cycle_id]; });
 
   var campanhas = sbSelect_('commission_campaigns', 'id,name,kind,starts_on,ends_on,per_sale_cents,goal_sales,bonus_cents,switch_bands,status',
