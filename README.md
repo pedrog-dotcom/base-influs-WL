@@ -1,25 +1,33 @@
 # Base Influencers WL (Voy BR)
 
-> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos e conteúdos da Irís (Supabase), vendas do lake (Nekt) e funil do Mixpanel (Nekt), em uma linha por **Data x Cupom**.
+> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos e conteúdos da Irís (Supabase), vendas do lake (Nekt) e funil do Mixpanel (Nekt), em duas abas: a base geral (uma linha por **Data x Cupom**) e a base de conteúdos.
 
-## Saída: aba `BASE_INFLUENCERS_WL`
+## Saída 1: aba `BASE_INFLUENCERS_WL` (base geral)
 
 | Coluna | Fonte e regra |
 |---|---|
-| Data | Data em Brasília: checkout para Orders, conclusão do pagamento para Acquisitions, 1º passo da sessão para funil, publicação para conteúdos, dia de competência para custos |
+| Data | Data em Brasília: checkout para Orders, conclusão do pagamento para Acquisitions, 1º passo da sessão para funil, dia de competência para custos |
 | Cupom | `promotion_coupon_code` do lake = `utm_campaign` do Mixpanel = `referral_code` da Irís, em maiúsculas |
 | Custo fixo | Irís, metodologia do Control Tower (`FIXO_MODO = 'CONTRATO'`): valor total do contrato dividido igualmente por todos os dias do contrato. Valor total = soma do fixo mensal (`contract_terms_ranges`) de cada mês que o contrato toca. Contrato sem data de fim: fixo mensal / dias do mês. Peças com `unit_value_cents` entram na data de publicação. Alternativas: `'DIARIZADO'` (fixo do mês / dias ativos no mês) e `'PECA'` (regra de pagamento) |
 | Custo de comissão | Irís: `sale_bands` dos termos vigentes, por ordinal de venda no mês (`tier_counter_scope`), aplicado às vendas pagas da Nekt. Mesma lógica do `calcular_pagamento` |
 | Custo de campanha de incentivo | Irís: `commission_campaigns` ativas (`bonus_por_venda`, `bonus_meta`, `troca_faixa`: a diferença sobre a faixa padrão) |
-| Custo total | Custo fixo + comissão + campanha de incentivo |
 | Sessões / Quest started / Recommendations / Checkout started | Mixpanel bruto (`manual_default.mixpanel_events`), réplica do board "Voy Saude BR Full funnel": sessões com Loaded a Page (topo de funil) → Questionnaire Started → Recommendations Loaded / Checkout Started na mesma sessão; filtro last touch `utm_source` in (influencer, Influencers), breakdown por `utm_campaign` |
 | Orders | Nekt, regra do SQL do pace: pedidos Voy/Brazil com `promotion_code = voy_br_coupon_15_influencer`, todos os contextos e status, na data do checkout. Creators híbridas (`CUPONS_HIBRIDOS`: ISAVOY, CARINAVOY/CARINA40) entram com qualquer promotion code |
 | Acquisitions | Mesmos pedidos, só os confirmados (`is_confirmed`, qualquer `order_context`), na data de conclusão do pagamento |
-| Total de conteúdos | Irís, `content_pieces` com status `entregue` e não canceladas, na data de publicação |
-| Reels, Feed, Stories, Transmissão IG, Vídeo TikTok, Vídeo YouTube, Shorts, Inserção YouTube, Live YouTube, Inserção Twitch, Envio WhatsApp, Episódio podcast, Outros formatos | Uma coluna por formato da Irís (`content_pieces.format`), mapeamento em `CFG.FORMATOS` |
-| Plataforma Instagram, TikTok, YouTube, Twitch, WhatsApp, Podcast, Outras | Soma dos formatos de cada plataforma |
 
 Valores com precisão cheia; arredondamento só no formato de exibição.
+
+## Saída 2: aba `BASE_CONTEUDOS_WL` (conteúdos)
+
+| Coluna | Fonte e regra |
+|---|---|
+| Data | Data de publicação da peça em Brasília (`published_at`; sem ela, `delivered_at`) |
+| Cupom | `referral_code` da influenciadora dona do contrato da peça |
+| Plataforma | Instagram, TikTok, YouTube, Twitch, WhatsApp, Podcast (ou Outras), a partir de `content_pieces.format` |
+| Formato | Reels, Feed, Stories, Transmissão, Vídeo, Shorts, Inserção, Live, Envio, Episódio (ou Não informado) |
+| Quantidade | Peças com status `entregue` e não canceladas |
+
+Mapeamento formato da Irís → plataforma/formato em `CFG.FORMATOS`.
 
 ## Arquivos
 
@@ -28,7 +36,7 @@ Valores com precisão cheia; arredondamento só no formato de exibição.
 - **Sql.gs**: SQLs da Nekt (vendas e funil)
 - **Iris.gs**: leitura das tabelas da Irís filtradas para `weight_loss`
 - **Custos.gs**: fixo, comissão e campanha de incentivo (lógica pura, testável fora do Apps Script)
-- **Conteudos.gs**: contagem de conteúdos por formato e plataforma
+- **Conteudos.gs**: base de conteúdos (Data, Cupom, Plataforma, Formato, Quantidade)
 - **Util.gs**: datas ISO e acumulador
 - **Base.gs**: orquestração, cache do funil, backfill, log, alerta e gatilho
 - **Menu.gs**: menu "Base Influencers" e diagnósticos
@@ -75,12 +83,12 @@ switch_bands:  [{"from": 1, "cents": 40000}]
 
 - Supabase IRIS (`eupkvybriepteduevrpr`): influencers, contracts, contract_terms_ranges, content_cycles, content_pieces, commission_campaigns, commission_campaign_contracts
 - Nekt: `webhook_v2_orders_lake`, `webhook_v2_order_discounts_lake` (alimentadas pelo Nekt-brazil a partir do lake) e `mixpanel_events`
-- Entrega: aba `BASE_INFLUENCERS_WL` da planilha vinculada (consumidor a definir; candidato natural: Base-Final-WL / Pacing-WL)
+- Entrega: abas `BASE_INFLUENCERS_WL` e `BASE_CONTEUDOS_WL` da planilha vinculada (consumidor a definir; candidato natural: Base-Final-WL / Pacing-WL)
 
 ```
-Irís (Supabase) ----------------------------+
-Nekt-brazil (lake) --> orders/discounts ----+--> base-influs-WL      --> aba BASE_INFLUENCERS_WL
-Mixpanel --> Nekt mixpanel_events ----------+
+Irís (Supabase) ----------------------------+                         +--> aba BASE_INFLUENCERS_WL
+Nekt-brazil (lake) --> orders/discounts ----+--> base-influs-WL -------+
+Mixpanel --> Nekt mixpanel_events ----------+                         +--> aba BASE_CONTEUDOS_WL
 ```
 
 > Manter esta documentação: ao ligar a base a outro repositório, atualizar este README e o mapa (README/RepoMap.gs) dos repositórios envolvidos.

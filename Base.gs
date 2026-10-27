@@ -10,7 +10,7 @@
  *
  * Granularidade: 1 linha por dia e cupom com qualquer valor diferente de zero.
  * Custos: fixo, comissão e campanha de incentivo (Irís). Vendas: lake via Nekt.
- * Funil: Mixpanel via Nekt (cache). Conteúdos: peças entregues na Irís.
+ * Funil: Mixpanel via Nekt (cache). Conteúdos ficam na aba à parte ABA_CONTEUDOS.
  ****************************************************************************************/
 
 function executarDiario() {
@@ -52,7 +52,6 @@ function atualizarBase_() {
 
   custoFixo_(iris, acc, ini, fim);
   comissaoECampanha_(iris, vendas, acc, ini, fim);
-  conteudos_(iris, acc, ini, fim);
 
   lerCacheFunil_().forEach(function (r) {
     if (r.data < ini || r.data > fim) return;
@@ -64,32 +63,40 @@ function atualizarBase_() {
 
   var linhas = linhasDaBase_(acc);
   escreverBase_(linhas);
-  logar_('BASE', 'ok', linhas.length, 'Base ' + ini + ' a ' + fim + ' em ' + Math.round((Date.now() - t0) / 1000) + 's');
+  var conteudos = linhasConteudos_(iris, ini, fim);
+  escreverConteudos_(conteudos);
+  logar_('BASE', 'ok', linhas.length, 'Base ' + ini + ' a ' + fim + ' (' + conteudos.length + ' linhas de conteúdo) em ' + Math.round((Date.now() - t0) / 1000) + 's');
   return linhas.length;
 }
 
 function linhasDaBase_(acc) {
-  var plataformas = colunasBase_().slice(13 + CFG.FORMATOS.length + 1)
-    .map(function (c) { return c.replace(/^Plataforma /, ''); });
-  var formatos = CFG.FORMATOS.map(function (f) { return f.coluna; }).concat([CFG.FORMATO_SEM_TIPO.coluna]);
   return Object.keys(acc).sort().map(function (k) {
     var r = acc[k];
-    var total = (r.fixo || 0) + (r.comissao || 0) + (r.campanha || 0);
-    return [r.data, r.cupom, r.fixo || 0, r.comissao || 0, r.campanha || 0, total,
-      r.sessoes || 0, r.quest || 0, r.recs || 0, r.checkout || 0, r.orders || 0, r.acq || 0,
-      r.conteudos || 0]
-      .concat(formatos.map(function (c) { return r['fmt:' + c] || 0; }))
-      .concat(plataformas.map(function (p) { return r['plat:' + p] || 0; }));
+    return [r.data, r.cupom, r.fixo || 0, r.comissao || 0, r.campanha || 0,
+      r.sessoes || 0, r.quest || 0, r.recs || 0, r.checkout || 0, r.orders || 0, r.acq || 0];
   });
 }
 
 function escreverBase_(linhas) {
-  var cols = colunasBase_();
-  var sh = aba_(CFG.ABA_BASE, cols);
+  escreverAba_(CFG.ABA_BASE, CFG.COLUNAS, linhas, function (sh, n) {
+    sh.getRange(2, 3, n, 3).setNumberFormat('#,##0.00');      // custos: arredonda só na exibição
+    sh.getRange(2, 6, n, 6).setNumberFormat('#,##0');
+  });
+}
+
+function escreverConteudos_(linhas) {
+  escreverAba_(CFG.ABA_CONTEUDOS, CFG.COLUNAS_CONTEUDOS, linhas, function (sh, n) {
+    sh.getRange(2, 5, n, 1).setNumberFormat('#,##0');
+  });
+}
+
+/** Substitui o conteúdo de uma aba (cabeçalho fixo + linhas com data ISO na 1ª coluna). */
+function escreverAba_(nome, cols, linhas, formatar) {
+  var sh = aba_(nome, cols);
   var n = cols.length;
   if (sh.getMaxColumns() < n) sh.insertColumnsAfter(sh.getMaxColumns(), n - sh.getMaxColumns());
-  var max = sh.getMaxRows();
-  if (max > 1) sh.getRange(2, 1, max - 1, Math.max(n, sh.getLastColumn())).clearContent();
+  if (sh.getMaxRows() > 1) sh.getRange(2, 1, sh.getMaxRows() - 1, Math.max(n, sh.getLastColumn())).clearContent();
+  if (sh.getLastColumn() > n) sh.getRange(1, n + 1, 1, sh.getLastColumn() - n).clearContent();
   if (linhas.length) {
     var valores = linhas.map(function (l) {
       var p = l[0].split('-');
@@ -100,8 +107,7 @@ function escreverBase_(linhas) {
     if (sh.getMaxRows() < valores.length + 1) sh.insertRowsAfter(sh.getMaxRows(), valores.length + 1 - sh.getMaxRows());
     sh.getRange(2, 1, valores.length, n).setValues(valores);
     sh.getRange(2, 1, valores.length, 1).setNumberFormat('dd/MM/yyyy');
-    sh.getRange(2, 3, valores.length, 4).setNumberFormat('#,##0.00');      // custos: arredonda só na exibição
-    sh.getRange(2, 7, valores.length, n - 6).setNumberFormat('#,##0');
+    if (formatar) formatar(sh, valores.length);
   }
   sh.setFrozenRows(1);
 }

@@ -77,40 +77,33 @@ var CFG = {
   ABA_LOG: '_log',
 
   // Conteúdos (Irís, content_pieces): peças entregues, na data de publicação.
-  // Uma coluna por formato e uma por plataforma, na ordem abaixo.
+  // Vão para a aba própria ABA_CONTEUDOS (Data | Cupom | Plataforma | Formato | Quantidade).
   CONTEUDO_STATUS: ['entregue'],
-  FORMATOS: [
-    { id: 'reels',          coluna: 'Reels',               plataforma: 'Instagram' },
-    { id: 'feed',           coluna: 'Feed',                plataforma: 'Instagram' },
-    { id: 'stories',        coluna: 'Stories',             plataforma: 'Instagram' },
-    { id: 'ig_transmissao', coluna: 'Transmissão IG',      plataforma: 'Instagram' },
-    { id: 'tiktok',         coluna: 'Vídeo TikTok',        plataforma: 'TikTok' },
-    { id: 'youtube',        coluna: 'Vídeo YouTube',       plataforma: 'YouTube' },
-    { id: 'shorts',         coluna: 'Shorts',              plataforma: 'YouTube' },
-    { id: 'insert',         coluna: 'Inserção YouTube',    plataforma: 'YouTube' },
-    { id: 'live_yt',        coluna: 'Live YouTube',        plataforma: 'YouTube' },
-    { id: 'insert_twitch',  coluna: 'Inserção Twitch',     plataforma: 'Twitch' },
-    { id: 'whatsapp',       coluna: 'Envio WhatsApp',      plataforma: 'WhatsApp' },
-    { id: 'podcast',        coluna: 'Episódio podcast',    plataforma: 'Podcast' }
-  ],
-  FORMATO_SEM_TIPO: { coluna: 'Outros formatos', plataforma: 'Outras' },
+  FORMATOS: {
+    reels:          { plataforma: 'Instagram', formato: 'Reels' },
+    feed:           { plataforma: 'Instagram', formato: 'Feed' },
+    stories:        { plataforma: 'Instagram', formato: 'Stories' },
+    ig_transmissao: { plataforma: 'Instagram', formato: 'Transmissão' },
+    tiktok:         { plataforma: 'TikTok',    formato: 'Vídeo' },
+    youtube:        { plataforma: 'YouTube',   formato: 'Vídeo' },
+    shorts:         { plataforma: 'YouTube',   formato: 'Shorts' },
+    insert:         { plataforma: 'YouTube',   formato: 'Inserção' },
+    live_yt:        { plataforma: 'YouTube',   formato: 'Live' },
+    insert_twitch:  { plataforma: 'Twitch',    formato: 'Inserção' },
+    whatsapp:       { plataforma: 'WhatsApp',  formato: 'Envio' },
+    podcast:        { plataforma: 'Podcast',   formato: 'Episódio' }
+  },
+  FORMATO_SEM_TIPO: { plataforma: 'Outras', formato: 'Não informado' },
+
+  // Abas e cabeçalhos (ordem fixa, consumida por outros scripts)
+  ABA_CONTEUDOS: 'BASE_CONTEUDOS_WL',
+  COLUNAS: ['Data', 'Cupom', 'Custo fixo', 'Custo de comissão', 'Custo de campanha de incentivo',
+    'Sessões', 'Quest started', 'Recommendations', 'Checkout started', 'Orders', 'Acquisitions'],
+  COLUNAS_CONTEUDOS: ['Data', 'Cupom', 'Plataforma', 'Formato', 'Quantidade'],
 
   NEKT_MCP_URL: 'https://mcp.nekt.com/mcp',
   NEKT_MAX_PAGINAS: 200
 };
-
-/** Cabeçalho da base (ordem fixa, consumida por outros scripts). */
-function colunasBase_() {
-  var plataformas = [];
-  CFG.FORMATOS.concat([CFG.FORMATO_SEM_TIPO]).forEach(function (f) {
-    if (plataformas.indexOf(f.plataforma) < 0) plataformas.push(f.plataforma);
-  });
-  return ['Data', 'Cupom', 'Custo fixo', 'Custo de comissão', 'Custo de campanha de incentivo', 'Custo total',
-    'Sessões', 'Quest started', 'Recommendations', 'Checkout started', 'Orders', 'Acquisitions',
-    'Total de conteúdos']
-    .concat(CFG.FORMATOS.map(function (f) { return f.coluna; }), [CFG.FORMATO_SEM_TIPO.coluna])
-    .concat(plataformas.map(function (p) { return 'Plataforma ' + p; }));
-}
 
 function prop_(nome, obrigatoria) {
   var v = PropertiesService.getScriptProperties().getProperty(nome);
