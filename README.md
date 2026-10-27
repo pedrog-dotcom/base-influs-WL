@@ -1,6 +1,6 @@
 # Base Influencers WL (Voy BR)
 
-> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos e conteúdos da Irís (Supabase), vendas do lake (Nekt) e funil do Mixpanel (Nekt), em duas abas: a base geral (uma linha por **Data x Cupom**) e a base de conteúdos.
+> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos e conteúdos da Irís (Supabase), vendas do lake (Nekt), custo de medicação do lake (BigQuery) e funil do Mixpanel (Nekt), em duas abas: a base geral (uma linha por **Data x Cupom**) e a base de conteúdos.
 
 ## Saída 1: aba `BASE_INFLUENCERS_WL` (base geral)
 
@@ -11,6 +11,7 @@
 | Custo fixo | Irís, metodologia do Control Tower (`FIXO_MODO = 'CONTRATO'`): valor total do contrato dividido igualmente por todos os dias do contrato. Valor total = soma do fixo mensal (`contract_terms_ranges`) de cada mês que o contrato toca. Contrato sem data de fim: fixo mensal / dias do mês. Peças com `unit_value_cents` entram na data de publicação. Alternativas: `'DIARIZADO'` (fixo do mês / dias ativos no mês) e `'PECA'` (regra de pagamento) |
 | Custo de comissão | Irís: `sale_bands` dos termos vigentes, por ordinal de venda no mês (`tier_counter_scope`), aplicado às vendas pagas da Nekt. Mesma lógica do `calcular_pagamento` |
 | Custo de campanha de incentivo | Irís: `commission_campaigns` ativas (`bonus_por_venda`, `bonus_meta`, `troca_faixa`: a diferença sobre a faixa padrão) |
+| Custo de medicação | Lake no BigQuery (`manual-data-team.prod`): gross revenue dos pedidos Voy/Brazil com desconto >= 90% (vendas gratuitas) de clientes cuja order de aquisição usou `voy_br_influvoy_4_99off` ou `voy_br_influvoy_99`, na data de conclusão do pagamento. O CPF do cliente (`dim_customer.cpf_number`) é cruzado com o CPF do creator em `manual_silver.creators` (Nekt) e o custo vai para o `referral_code` do creator. Sem creator correspondente: linha `(MEDICACAO SEM CREATOR)`. Nenhum CPF é gravado na planilha |
 | Sessões / Quest started / Recommendations / Checkout started | Mixpanel bruto (`manual_default.mixpanel_events`), réplica do board "Voy Saude BR Full funnel": sessões com Loaded a Page (topo de funil) → Questionnaire Started → Recommendations Loaded / Checkout Started na mesma sessão; filtro last touch `utm_source` in (influencer, Influencers), breakdown por `utm_campaign` |
 | Orders | Nekt, regra do SQL do pace: pedidos Voy/Brazil com `promotion_code = voy_br_coupon_15_influencer`, todos os contextos e status, na data do checkout. Creators híbridas (`CUPONS_HIBRIDOS`: ISAVOY, CARINAVOY/CARINA40) entram com qualquer promotion code |
 | Acquisitions | Mesmos pedidos, só os confirmados (`is_confirmed`, qualquer `order_context`), na data de conclusão do pagamento |
@@ -32,10 +33,11 @@ Mapeamento formato da Irís → plataforma/formato em `CFG.FORMATOS`.
 ## Arquivos
 
 - **Config.gs**: parâmetros (datas, promo codes, modos de fixo e comissão, regras do funil, abas)
-- **Clients.gs**: Supabase via PostgREST (paginado) e Nekt via MCP `execute_sql` (mesmo cliente do CRM-WL)
-- **Sql.gs**: SQLs da Nekt (vendas e funil)
+- **Clients.gs**: Supabase via PostgREST (paginado), Nekt via MCP `execute_sql` (mesmo cliente do CRM-WL) e BigQuery (serviço avançado)
+- **Sql.gs**: SQLs da Nekt (vendas, funil, CPF dos creators) e do lake (medicação)
 - **Iris.gs**: leitura das tabelas da Irís filtradas para `weight_loss`
 - **Custos.gs**: fixo, comissão e campanha de incentivo (lógica pura, testável fora do Apps Script)
+- **Medicacao.gs**: cruzamento CPF do cliente x CPF do creator e custo de medicação por cupom
 - **Conteudos.gs**: base de conteúdos (Data, Cupom, Plataforma, Formato, Quantidade)
 - **Util.gs**: datas ISO e acumulador
 - **Base.gs**: orquestração, cache do funil, backfill, log, alerta e gatilho
@@ -49,7 +51,8 @@ Mapeamento formato da Irís → plataforma/formato em `CFG.FORMATOS`.
    - `SUPABASE_SERVICE_KEY` = service_role key do projeto IRIS
    - `NEKT_MCP_TOKEN` = token de MCP da Nekt (o do CRM-WL serve)
    - `ALERT_EMAIL` (opcional)
-3. Menu **Base Influencers > Testar conexões**.
+   - Serviço avançado **BigQuery API** ativado (já declarado no `appsscript.json`). A conta que executa precisa ler `manual-data-team.prod` e rodar jobs no projeto `manual-data-team`, como no Base-Final-HL.
+3. Menu **Base Influencers > Testar conexões** e **Diagnóstico da medicação (CPF)**.
 4. **Backfill do funil desde DATA_INICIO** (continua sozinho por gatilho até terminar; ver `_log`).
 5. **Reconstruir só a base**.
 6. **Instalar gatilho diário** (≈ 7h40: funil D-1..D-3 + base inteira).
@@ -72,6 +75,7 @@ switch_bands:  [{"from": 1, "cents": 40000}]
 - **troca_faixa**: o ordinal da campanha conta só vendas dentro do período da campanha.
 - **Custo fixo diarizado** cobre contratos `active`/`ended` em todos os meses do contrato e `paused` só nos meses com ciclo aberto. Pode diferir do pago quando há peças glosadas.
 - **Diferença para o pace (Influencers - PACING V3)**: no pace, a lista Cupom → Cupom principal da aba `Mapeamento` está com `#REF!`, então só ~13 cupons recebem Orders/Acquisitions (out/26 até 26/10: 74 orders no pace x 558 no lake). Para esses cupons a base bate exatamente com o pace; a diferença está nos cupons que o pace descarta (XULIA, BORAJUNTAS, SARADA, ECS e outros).
+- **Medicação**: o SQL original conta o gross uma vez por linha de desconto do pedido (`fct_order_discounts`); aqui é uma vez por pedido. Pedidos sem pagamento concluído não entram (sem data de custo). Só 42 dos 61 creators da `manual_silver.creators` têm CPF: medicação de creator sem CPF cadastrado cai em `(MEDICACAO SEM CREATOR)`.
 - **Conteúdos** dependem do preenchimento da Irís: hoje só 15 peças estão `entregue` (todas em 29/09/2026). Outros status de postagem podem entrar via `CFG.CONTEUDO_STATUS`.
 - **Funil**:
   - O filtro "Voy BR top of funnel filter for acquisitions" não é acessível pela API; a réplica usa domínio `*.voysaude.com.br` e país BR (`CFG.FUNIL`). Ajustar se o filtro tiver mais regras e conferir um dia contra o board (`debugFunilDia`).
@@ -82,12 +86,14 @@ switch_bands:  [{"from": 1, "cents": 40000}]
 ## Recebe dados de / entrega para
 
 - Supabase IRIS (`eupkvybriepteduevrpr`): influencers, contracts, contract_terms_ranges, content_cycles, content_pieces, commission_campaigns, commission_campaign_contracts
-- Nekt: `webhook_v2_orders_lake`, `webhook_v2_order_discounts_lake` (alimentadas pelo Nekt-brazil a partir do lake) e `mixpanel_events`
+- Nekt: `webhook_v2_orders_lake`, `webhook_v2_order_discounts_lake` (alimentadas pelo Nekt-brazil a partir do lake), `mixpanel_events` e `manual_silver.creators`
+- BigQuery: `manual-data-team.prod.fct_orders`, `dim_customer`, `dim_order_item_discounts` (medicação)
 - Entrega: abas `BASE_INFLUENCERS_WL` e `BASE_CONTEUDOS_WL` da planilha vinculada (consumidor a definir; candidato natural: Base-Final-WL / Pacing-WL)
 
 ```
 Irís (Supabase) ----------------------------+                         +--> aba BASE_INFLUENCERS_WL
 Nekt-brazil (lake) --> orders/discounts ----+--> base-influs-WL -------+
+Lake (BigQuery) --> medicação por CPF ------+
 Mixpanel --> Nekt mixpanel_events ----------+                         +--> aba BASE_CONTEUDOS_WL
 ```
 

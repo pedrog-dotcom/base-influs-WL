@@ -5,6 +5,8 @@
  *   SUPABASE_URL          https://eupkvybriepteduevrpr.supabase.co   (projeto IRIS)
  *   SUPABASE_SERVICE_KEY  service_role key do projeto IRIS (lê tabelas com RLS)
  *   NEKT_MCP_TOKEN        token de MCP da Nekt (o mesmo usado em CRM-WL serve)
+ * O custo de medicação lê o lake direto no BigQuery (serviço avançado "BigQuery API",
+ * projeto CFG.BQ_PROJECT), com a conta que executa o script, como o Base-Final-HL.
  *   ALERT_EMAIL           (opcional) destinatário dos avisos de erro
  ****************************************************************************************/
 
@@ -30,6 +32,18 @@ var CFG = {
   CUPONS_HIBRIDOS: ['ISAVOY', 'CARINAVOY', 'CARINA40'],
   // Cupons alternativos somados no cupom principal
   CUPOM_ALIAS: { 'CARINA40': 'CARINAVOY' },
+
+  // Custo de medicação (lake no BigQuery): pedidos com desconto >= MEDICACAO_DESCONTO_MIN
+  // (vendas gratuitas) de clientes cuja order de aquisição usou PROMO_MEDICACAO. Custo = gross
+  // revenue do pedido, na data de conclusão do pagamento. O CPF do cliente é cruzado com o CPF
+  // do creator em manual_silver.creators (Nekt) e o custo vai para o referral_code do creator.
+  // CPF sem creator correspondente vai para a linha CUPOM_MEDICACAO_SEM_CREATOR.
+  // Os CPFs só são usados em memória: nada de CPF é gravado na planilha.
+  BQ_PROJECT: 'manual-data-team',
+  PROMO_MEDICACAO: ['voy_br_influvoy_4_99off', 'voy_br_influvoy_99'],
+  MEDICACAO_DESCONTO_MIN: 0.9,
+  TABELA_CREATORS: 'manual_silver.creators',
+  CUPOM_MEDICACAO_SEM_CREATOR: '(MEDICACAO SEM CREATOR)',
 
   // Custo fixo:
   //   'CONTRATO'  = metodologia do Control Tower (padrão): valor total do contrato dividido
@@ -98,7 +112,7 @@ var CFG = {
   // Abas e cabeçalhos (ordem fixa, consumida por outros scripts)
   ABA_CONTEUDOS: 'BASE_CONTEUDOS_WL',
   COLUNAS: ['Data', 'Cupom', 'Custo fixo', 'Custo de comissão', 'Custo de campanha de incentivo',
-    'Sessões', 'Quest started', 'Recommendations', 'Checkout started', 'Orders', 'Acquisitions'],
+    'Custo de medicação', 'Sessões', 'Quest started', 'Recommendations', 'Checkout started', 'Orders', 'Acquisitions'],
   COLUNAS_CONTEUDOS: ['Data', 'Cupom', 'Plataforma', 'Formato', 'Quantidade'],
 
   NEKT_MCP_URL: 'https://mcp.nekt.com/mcp',

@@ -53,6 +53,8 @@ function atualizarBase_() {
   custoFixo_(iris, acc, ini, fim);
   comissaoECampanha_(iris, vendas, acc, ini, fim);
 
+  var med = custoMedicacao_(bqSql_(sqlMedicacaoLake_(ini)), mapaCpfCreators_(nektSql_(sqlCreatorsCpf_())), acc, ini, fim);
+
   lerCacheFunil_().forEach(function (r) {
     if (r.data < ini || r.data > fim) return;
     accAdd_(acc, r.data, r.cupom, 'sessoes', r.sessoes);
@@ -65,22 +67,23 @@ function atualizarBase_() {
   escreverBase_(linhas);
   var conteudos = linhasConteudos_(iris, ini, fim);
   escreverConteudos_(conteudos);
-  logar_('BASE', 'ok', linhas.length, 'Base ' + ini + ' a ' + fim + ' (' + conteudos.length + ' linhas de conteúdo) em ' + Math.round((Date.now() - t0) / 1000) + 's');
+  logar_('BASE', 'ok', linhas.length, 'Base ' + ini + ' a ' + fim + ' (' + conteudos.length + ' linhas de conteúdo; medicação: ' +
+    med.casados + '/' + med.pedidos + ' pedidos casados por CPF) em ' + Math.round((Date.now() - t0) / 1000) + 's');
   return linhas.length;
 }
 
 function linhasDaBase_(acc) {
   return Object.keys(acc).sort().map(function (k) {
     var r = acc[k];
-    return [r.data, r.cupom, r.fixo || 0, r.comissao || 0, r.campanha || 0,
+    return [r.data, r.cupom, r.fixo || 0, r.comissao || 0, r.campanha || 0, r.medicacao || 0,
       r.sessoes || 0, r.quest || 0, r.recs || 0, r.checkout || 0, r.orders || 0, r.acq || 0];
   });
 }
 
 function escreverBase_(linhas) {
   escreverAba_(CFG.ABA_BASE, CFG.COLUNAS, linhas, function (sh, n) {
-    sh.getRange(2, 3, n, 3).setNumberFormat('#,##0.00');      // custos: arredonda só na exibição
-    sh.getRange(2, 6, n, 6).setNumberFormat('#,##0');
+    sh.getRange(2, 3, n, 4).setNumberFormat('#,##0.00');      // custos: arredonda só na exibição
+    sh.getRange(2, 7, n, 6).setNumberFormat('#,##0');
   });
 }
 

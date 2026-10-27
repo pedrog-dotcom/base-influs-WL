@@ -52,6 +52,43 @@ function sqlVendasInfluencer_(desdeISO) {
 }
 
 /**
+ * Custo de medicação, direto no lake (BigQuery, manual-data-team.prod). Adaptação do SQL de
+ * medicação: pedidos Voy/Brazil com desconto >= MEDICACAO_DESCONTO_MIN, de clientes cuja order
+ * de aquisição (mesmo parent_customer_id) usou PROMO_MEDICACAO. Uma linha por pedido (o SQL
+ * original repete o gross quando o pedido tem mais de um desconto). Só pedidos com pagamento
+ * concluído, que é a data do custo.
+ */
+function sqlMedicacaoLake_(desdeISO) {
+  var p = '`' + CFG.BQ_PROJECT + '.prod.';
+  return "SELECT\n" +
+    "  o.order_id,\n" +
+    "  FORMAT_DATE('%Y-%m-%d', DATE(o.payment_completed_at, 'Brazil/East')) AS data,\n" +
+    "  LPAD(REGEXP_REPLACE(IFNULL(c.cpf_number, ''), r'\\D', ''), 11, '0') AS cpf,\n" +
+    "  o.gross_revenue_local AS gross,\n" +
+    "  o.is_confirmed\n" +
+    "FROM " + p + "fct_orders` AS o\n" +
+    "LEFT JOIN " + p + "dim_customer` AS c ON o.customer_id = c.customer_id\n" +
+    "WHERE IF(o.brand_at_checkout = 'Manual', 'MANUAL', o.brand_at_checkout) = " + sqlList_([CFG.BRAND]) + "\n" +
+    "  AND INITCAP(REPLACE(o.country, '_', ' ')) = 'Brazil'\n" +
+    "  AND SAFE_DIVIDE(o.discount_local, o.gross_revenue_local) >= " + Number(CFG.MEDICACAO_DESCONTO_MIN) + "\n" +
+    "  AND o.payment_completed_at IS NOT NULL\n" +
+    "  AND DATE(o.payment_completed_at, 'Brazil/East') >= DATE '" + desdeISO + "'\n" +
+    "  AND EXISTS (\n" +
+    "    SELECT 1 FROM " + p + "fct_orders` AS a\n" +
+    "    JOIN " + p + "dim_order_item_discounts` AS d ON d.order_id = a.order_id\n" +
+    "    WHERE a.parent_customer_id = o.parent_customer_id AND a.is_acquisition_order\n" +
+    "      AND d.promotion_code IN (" + sqlList_(CFG.PROMO_MEDICACAO) + "))";
+}
+
+/** CPF e cupom (referral_code) dos creators, na base de creators da Nekt. */
+function sqlCreatorsCpf_() {
+  return "SELECT UPPER(TRIM(referral_code)) AS cupom,\n" +
+    "  LPAD(REGEXP_REPLACE(cpf, r'\\D', ''), 11, '0') AS cpf\n" +
+    "FROM `" + CFG.TABELA_CREATORS.replace('.', '`.`') + "`\n" +
+    "WHERE NULLIF(TRIM(cpf), '') IS NOT NULL AND NULLIF(TRIM(referral_code), '') IS NOT NULL";
+}
+
+/**
  * Funil por dia e cupom (utm_campaign do last touch no 1º passo), contado em sessões.
  * Sessão: eventos do mesmo distinct_id com intervalo <= SESSAO_MIN.
  * Last touch: último utm_source (com o utm_campaign do mesmo evento) visto até o evento.
