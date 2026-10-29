@@ -113,3 +113,18 @@ Mixpanel --> Nekt mixpanel_events ----------+                         +--> aba B
 ```
 
 > Manter esta documentação: ao ligar a base a outro repositório, atualizar este README e o mapa (README/RepoMap.gs) dos repositórios envolvidos.
+
+## Versão do PACING V3 (`pace/`)
+
+Planilha "WL BR | Influencers - PACING V3". A aba `Acquisition: Paid Creators` continua sendo uma fórmula:
+
+- **até a véspera do corte** (`Config!B14`, 01/11/2026): igual a antes (H_Spend, H_Mixpanel, H_Checkouts);
+- **a partir do corte**: lê a aba auxiliar oculta `H_Iris` (Data | Cupom principal | Metric | Value), gerada por este código com a mesma lógica da base de teste. O cupom passa pelo de-para da aba `Mapeamento` (Cupom D→E e UTM J→K).
+
+Instalação:
+
+1. `./pace/build.sh` gera `pace/dist/BaseIris.gs` (um arquivo só) e `pace/dist/appsscript.json`; cole os dois no projeto Apps Script da planilha.
+2. Propriedades do script: `SUPABASE_SERVICE_KEY`, `NEKT_MCP_TOKEN`, `MIXPANEL_SA_USER`, `MIXPANEL_SA_SECRET` (e `ALERT_EMAIL`, opcional). `SUPABASE_URL` e o projeto do Mixpanel já têm padrão no código.
+3. Rodar `executarDiario` uma vez (autoriza e cria `H_Iris`, `_iris_cache_funil`, `_iris_log`).
+4. Rodar `configurarPace` (grava o corte em `Config!B14`, troca a fórmula, guarda a anterior em `Config!B16` e esconde as abas auxiliares). `desfazerPace` volta a fórmula anterior.
+5. Rodar `instalarGatilhoDiario` (≈ 7h40).
