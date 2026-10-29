@@ -27,9 +27,31 @@ function sqlOrdersCte_() {
  * data     = checkout em Brasília (Orders)
  * data_pag = conclusão do pagamento em Brasília (Acquisitions, quando confirmado)
  * Lê pedidos com checkout OU pagamento a partir de desdeISO.
+ *
+ * Métricas de categoria (CFG.CATEGORIA_LAKE, ex.: weight_loss), por customer_id, olhando todos os
+ * pedidos do cliente no país (qualquer cupom, qualquer order_context):
+ *   cat_ord = é o 1º pedido do cliente na categoria (pela data do checkout)
+ *   cat_pc  = é o 1º pedido confirmado do cliente na categoria (pela data do checkout)
+ *   cat_acq = é o 1º pedido confirmado com pagamento concluído na categoria (pela data do pagamento)
  */
 function sqlVendasInfluencer_(desdeISO) {
+  var conf = "CAST(is_confirmed AS STRING) = 'true'";
+  var pag = "NULLIF(payment_completed_at, '') IS NOT NULL";
   return "WITH " + sqlOrdersCte_() + ",\n" +
+    "todas AS (\n" +
+    "  SELECT * FROM `manual_default`.`webhook_v2_orders_lake`\n" +
+    "  WHERE LOWER(country) = " + sqlList_([CFG.COUNTRY]) + "\n" +
+    "  QUALIFY ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY _nekt_webhook_received_at DESC) = 1\n" +
+    "),\n" +
+    "cat AS (\n" +
+    "  SELECT order_id,\n" +
+    "    ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY TIMESTAMP(system_checkout_at), order_id) = 1 AS cat_ord,\n" +
+    "    IF(" + conf + ", ROW_NUMBER() OVER (PARTITION BY customer_id, " + conf + " ORDER BY TIMESTAMP(system_checkout_at), order_id) = 1, FALSE) AS cat_pc,\n" +
+    "    IF(" + conf + " AND " + pag + ", ROW_NUMBER() OVER (PARTITION BY customer_id, " + conf + " AND " + pag + "\n" +
+    "       ORDER BY TIMESTAMP(NULLIF(payment_completed_at, '')), order_id) = 1, FALSE) AS cat_acq\n" +
+    "  FROM todas\n" +
+    "  WHERE order_taxonomy_business_category = " + sqlList_([CFG.CATEGORIA_LAKE]) + " AND NULLIF(system_checkout_at, '') IS NOT NULL\n" +
+    "),\n" +
     "disc AS (\n" +
     "  SELECT order_id, UPPER(TRIM(ANY_VALUE(promotion_coupon_code))) AS cupom\n" +
     "  FROM `manual_default`.`webhook_v2_order_discounts_lake`\n" +
@@ -42,8 +64,12 @@ function sqlVendasInfluencer_(desdeISO) {
     "  IF(NULLIF(o.payment_completed_at, '') IS NULL, NULL,\n" +
     "     FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(o.payment_completed_at), 'America/Sao_Paulo'))) AS data_pag,\n" +
     "  FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP(o.system_checkout_at)) AS checkout_utc,\n" +
-    "  CAST(o.is_confirmed AS STRING) AS is_confirmed\n" +
+    "  CAST(o.is_confirmed AS STRING) AS is_confirmed,\n" +
+    "  CAST(IFNULL(c.cat_ord, FALSE) AS STRING) AS cat_ord,\n" +
+    "  CAST(IFNULL(c.cat_pc, FALSE) AS STRING) AS cat_pc,\n" +
+    "  CAST(IFNULL(c.cat_acq, FALSE) AS STRING) AS cat_acq\n" +
     "FROM disc d JOIN orders o USING (order_id)\n" +
+    "LEFT JOIN cat c USING (order_id)\n" +
     "WHERE NULLIF(o.system_checkout_at, '') IS NOT NULL\n" +
     "  AND (DATE(TIMESTAMP(o.system_checkout_at), 'America/Sao_Paulo') >= DATE '" + desdeISO + "'\n" +
     "       OR (NULLIF(o.payment_completed_at, '') IS NOT NULL\n" +

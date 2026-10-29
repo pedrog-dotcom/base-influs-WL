@@ -25,6 +25,7 @@ var CFG = {
   BRAND: 'Voy',
   COUNTRY: 'brazil',
   CATEGORIA_IRIS: 'weight_loss',
+  CATEGORIA_LAKE: 'weight_loss',    // order_taxonomy_business_category das métricas "Category"
 
   // Vendas de influenciador (lake via Nekt), mesma regra do SQL do pace:
   //   Orders       = pedidos com o cupom, todos os status, na data do checkout
@@ -152,6 +153,9 @@ var CFG = {
     'Orders': ['orders'],
     'Payment Completed': ['pagos'],
     'Acquisitions': ['acq'],
+    'Orders Category': ['orders_cat'],
+    'Payment Completed Category': ['pagos_cat'],
+    'Acquisitions Category': ['acq_cat'],
     'Spend': ['fixo', 'comissao', 'campanha', 'medicacao']
   },
   COLUNAS_CONTEUDOS: ['Data', 'Cupom', 'Plataforma', 'Formato', 'Quantidade'],

@@ -13,6 +13,9 @@ Colunas: `Data | Channel Group | Channel | Subchannel | Metrica | Valor`. Channe
 | Payment Completed | pedidos com o cupom que tiveram o pagamento concluído, na data do checkout (subconjunto de Orders) |
 | Acquisitions | pedidos confirmados, na data do pagamento |
 | Spend | custo fixo + comissão + campanha de incentivo + medicação |
+| Orders Category | Orders que são o 1º pedido do cliente (`customer_id`) na categoria weight_loss, olhando todos os pedidos dele no Brasil (qualquer cupom e `order_context`), na data do checkout |
+| Payment Completed Category | Orders que são o 1º pedido confirmado do cliente na categoria, na data do checkout |
+| Acquisitions Category | Acquisitions que são o 1º pedido confirmado com pagamento concluído do cliente na categoria, na data do pagamento |
 
 Regras de cada componente:
 

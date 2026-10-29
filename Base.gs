@@ -45,7 +45,8 @@ function atualizarBase_() {
     return {
       order_id: r.order_id, order_number: r.order_number, cupom: cupom, data: r.data,
       data_pag: r.data_pag || null, checkout_utc: r.checkout_utc,
-      confirmado: String(r.is_confirmed) === 'true', pago: !!r.data_pag
+      confirmado: String(r.is_confirmed) === 'true', pago: !!r.data_pag,
+      catOrd: String(r.cat_ord) === 'true', catPc: String(r.cat_pc) === 'true', catAcq: String(r.cat_acq) === 'true'
     };
   });
   vendas.forEach(function (v) {
@@ -55,6 +56,10 @@ function atualizarBase_() {
     if (v.confirmado && v.data_pag && v.data_pag >= ini && v.data_pag <= fim) accAdd_(acc, v.data_pag, v.cupom, 'acq', 1);
     // Payment Completed: pedidos do dia (data do checkout) que tiveram o pagamento concluído
     if (v.pago && v.data >= ini && v.data <= fim) accAdd_(acc, v.data, v.cupom, 'pagos', 1);
+    // Métricas de categoria: 1º pedido do cliente na categoria (qualquer order_context)
+    if (v.catOrd && v.data >= ini && v.data <= fim) accAdd_(acc, v.data, v.cupom, 'orders_cat', 1);
+    if (v.catPc && v.data >= ini && v.data <= fim) accAdd_(acc, v.data, v.cupom, 'pagos_cat', 1);
+    if (v.catAcq && v.data_pag && v.data_pag >= ini && v.data_pag <= fim) accAdd_(acc, v.data_pag, v.cupom, 'acq_cat', 1);
   });
 
   custoFixo_(iris, acc, ini, fim);
