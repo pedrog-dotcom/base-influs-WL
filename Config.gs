@@ -54,6 +54,9 @@ var CFG = {
   //                 de publicação de cada peça entregue (hoje quase todas estão 'sem_data')
   // Peças com valor próprio (unit_value_cents) entram sempre na data de publicação.
   FIXO_MODO: 'CONTRATO',
+  // Contrato sem ends_on: 'FIM_DO_MES' = termina no último dia do mês de starts_on
+  // (contratos duram até um mês; renovação abre nova linha). null = sem fim (rateio mês a mês).
+  CONTRATO_SEM_FIM: 'FIM_DO_MES',
   FIXO_STATUS_CONTRATO: ['active', 'ended'],   // paused só entra nos meses com ciclo aberto
   CUPONS_IGNORAR: ['CUPOMTESTE', 'TEESTE'],     // cadastros de teste na Irís
 

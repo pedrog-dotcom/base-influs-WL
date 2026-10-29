@@ -60,7 +60,8 @@ function custoFixo_(iris, acc, iniISO, fimISO) {
       var statusOk = CFG.FIXO_STATUS_CONTRATO.indexOf(c.status) >= 0;
       var m, d;
       if (c.ends_on) {
-        if (!statusOk) return;
+        // Fim implícito (fim do mês): mantém a regra antiga de aceitar status fora da lista se houver ciclo.
+        if (!statusOk && !(c.fimImplicito && ciclos[inicioMes_(c.starts_on)])) return;
         var total = 0;
         for (m = inicioMes_(c.starts_on); m <= inicioMes_(c.ends_on); m = somaDias_(fimMes_(m), 1)) {
           total += mensalNoMes(c, m, ciclos[m]);

@@ -19,7 +19,15 @@ function carregarIris_() {
     'id,influencer_id,category_id,monthly_fixed_cents,pieces_per_cycle,starts_on,ends_on,status,previous_contract_id,commission_extended_until',
     'category_id=eq.' + catId);
   var idsContrato = {};
-  contratos.forEach(function (c) { idsContrato[c.id] = true; });
+  contratos.forEach(function (c) {
+    idsContrato[c.id] = true;
+    // Regra de negócio: contrato dura no máximo um mês (renovação abre nova linha).
+    // Sem ends_on, o contrato termina no último dia do mês de starts_on.
+    if (!c.ends_on && c.starts_on && CFG.CONTRATO_SEM_FIM === 'FIM_DO_MES') {
+      c.ends_on = fimMes_(String(c.starts_on).slice(0, 10));
+      c.fimImplicito = true;
+    }
+  });
 
   var termos = {};
   sbSelect_('contract_terms_ranges', 'id,contract_id,valid_from,valid_until,fixed_monthly_cents,sale_bands,tier_counter_scope,agency_share_bps')
