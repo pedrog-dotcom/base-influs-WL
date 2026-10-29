@@ -1,5 +1,5 @@
 /****************************************************************************************
- * Base.gs: monta a aba BASE_INFLUENCERS_WL (Data x Cupom) e cuida do cache do funil.
+ * Base.gs: monta a aba BASE_INFLUENCERS_WL (formato longo: Data x Cupom x Métrica) e cuida do cache do funil.
  *
  * ENTRYPOINTS (menu "Base Influencers" ou botão Executar):
  *   executarDiario()             funil incremental (D-1..D-3) + reconstrução da base. Gatilho diário.
@@ -53,6 +53,8 @@ function atualizarBase_() {
     if (v.data >= ini && v.data <= fim) accAdd_(acc, v.data, v.cupom, 'orders', 1);
     // Acquisitions: pedidos confirmados, na data de conclusão do pagamento
     if (v.confirmado && v.data_pag && v.data_pag >= ini && v.data_pag <= fim) accAdd_(acc, v.data_pag, v.cupom, 'acq', 1);
+    // Payment Completed: pedidos com pagamento concluído (confirmados ou não), na data do pagamento
+    if (v.pago && v.data_pag >= ini && v.data_pag <= fim) accAdd_(acc, v.data_pag, v.cupom, 'pagos', 1);
   });
 
   custoFixo_(iris, acc, ini, fim);
@@ -72,24 +74,34 @@ function atualizarBase_() {
   escreverBase_(linhas);
   var conteudos = linhasConteudos_(iris, ini, fim);
   escreverConteudos_(conteudos);
-  logar_('BASE', 'ok', linhas.length, 'Base ' + ini + ' a ' + fim + ' (' + conteudos.length + ' linhas de conteúdo; medicação: ' +
+  logar_('BASE', 'ok', linhas.length, 'Base ' + (CFG.BASE_DESDE || ini) + ' a ' + fim + ' (' + conteudos.length + ' linhas de conteúdo; medicação: ' +
     med.casados + '/' + med.pedidos + ' pedidos casados por CPF) em ' + Math.round((Date.now() - t0) / 1000) + 's');
   return linhas.length;
 }
 
+/** Formato longo: Data | Channel Group | Channel | Subchannel (cupom) | Metrica | Valor, a partir de BASE_DESDE. */
 function linhasDaBase_(acc) {
-  return Object.keys(acc).sort().map(function (k) {
+  var desde = CFG.BASE_DESDE || CFG.DATA_INICIO;
+  var nomes = Object.keys(CFG.METRICAS).sort(function (a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; });
+  var out = [];
+  Object.keys(acc).forEach(function (k) {
     var r = acc[k];
-    return [r.data, r.cupom, r.fixo || 0, r.comissao || 0, r.campanha || 0, r.medicacao || 0,
-      r.sessoes || 0, r.quest || 0, r.recs || 0, r.checkout || 0, r.orders || 0, r.acq || 0];
+    if (r.data < desde) return;
+    nomes.forEach(function (m) {
+      var v = 0;
+      CFG.METRICAS[m].forEach(function (c) { v += r[c] || 0; });
+      if (Math.abs(v) > 1e-9) out.push([r.data, CFG.CHANNEL_GROUP, CFG.CHANNEL, r.cupom, m, v]);
+    });
   });
+  out.sort(function (a, b) {
+    return a[0] !== b[0] ? (a[0] < b[0] ? -1 : 1) : a[3] !== b[3] ? (a[3] < b[3] ? -1 : 1)
+      : (a[4].toLowerCase() < b[4].toLowerCase() ? -1 : 1);
+  });
+  return out;
 }
 
 function escreverBase_(linhas) {
-  escreverAba_(CFG.ABA_BASE, CFG.COLUNAS, linhas, function (sh, n) {
-    sh.getRange(2, 3, n, 4).setNumberFormat('#,##0.00');      // custos: arredonda só na exibição
-    sh.getRange(2, 7, n, 6).setNumberFormat('#,##0');
-  });
+  escreverAba_(CFG.ABA_BASE, CFG.COLUNAS, linhas, null, CFG.FORMATO_DATA_BASE);
 }
 
 function escreverConteudos_(linhas) {
@@ -114,7 +126,7 @@ function serialSheets_(iso) {
  * dados é limpa com valores e formatos, a escrita é em lotes e, no fim, confere se nenhuma
  * linha ficou sem data.
  */
-function escreverAba_(nome, cols, linhas, formatar) {
+function escreverAba_(nome, cols, linhas, formatar, formatoData) {
   var sh = aba_(nome, cols);
   var n = cols.length;
   if (sh.getMaxColumns() < n) sh.insertColumnsAfter(sh.getMaxColumns(), n - sh.getMaxColumns());
@@ -133,7 +145,7 @@ function escreverAba_(nome, cols, linhas, formatar) {
       sh.getRange(2 + i, 1, lote.length, n).setValues(lote);
       SpreadsheetApp.flush();
     }
-    sh.getRange(2, 1, valores.length, 1).setNumberFormat('dd/MM/yyyy');
+    sh.getRange(2, 1, valores.length, 1).setNumberFormat(formatoData || 'dd/MM/yyyy');
     if (formatar) formatar(sh, valores.length);
     SpreadsheetApp.flush();
 

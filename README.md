@@ -1,8 +1,21 @@
 # Base Influencers WL (Voy BR)
 
-> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos e conteúdos da Irís (Supabase), vendas do lake (Nekt), custo de medicação do lake (BigQuery) e funil do Mixpanel (Query API, report do board), em duas abas: a base geral (uma linha por **Data x Cupom**) e a base de conteúdos.
+> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos e conteúdos da Irís (Supabase), vendas do lake (Nekt), custo de medicação do lake (BigQuery) e funil do Mixpanel (Query API, report do board), em duas abas: a base geral em formato longo (uma linha por **Data x Cupom x Métrica**, a partir de 21/10/2026) e a base de conteúdos.
 
-## Saída 1: aba `BASE_INFLUENCERS_WL` (base geral)
+## Saída 1: aba `BASE_INFLUENCERS_WL` (base geral, formato longo)
+
+Colunas: `Data | Channel Group | Channel | Subchannel | Metrica | Valor`. Channel Group = `Influence`, Channel = `Influencers`, Subchannel = cupom. Só valores diferentes de zero, a partir de `CFG.BASE_DESDE` (21/10/2026). Data em `yyyy-mm-dd`.
+
+| Metrica | Regra |
+|---|---|
+| Sessions, Quest started, Recommendations, Checkout started | funil do Mixpanel (ver abaixo) |
+| Orders | pedidos com o cupom, na data do checkout |
+| Payment Completed | pedidos com pagamento concluído (confirmados ou não), na data do pagamento |
+| Acquisitions | pedidos confirmados, na data do pagamento |
+| Spend | custo fixo + comissão + campanha de incentivo + medicação |
+
+Regras de cada componente:
+
 
 | Coluna | Fonte e regra |
 |---|---|

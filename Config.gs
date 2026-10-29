@@ -131,8 +131,24 @@ var CFG = {
 
   // Abas e cabeçalhos (ordem fixa, consumida por outros scripts)
   ABA_CONTEUDOS: 'BASE_CONTEUDOS_WL',
-  COLUNAS: ['Data', 'Cupom', 'Custo fixo', 'Custo de comissão', 'Custo de campanha de incentivo',
-    'Custo de medicação', 'Sessões', 'Quest started', 'Recommendations', 'Checkout started', 'Orders', 'Acquisitions'],
+  // Aba principal em formato longo (uma linha por Data x Cupom x Métrica, só valores != 0).
+  // Spend = custo fixo + comissão + campanha de incentivo + medicação.
+  COLUNAS: ['Data', 'Channel Group', 'Channel', 'Subchannel', 'Metrica', 'Valor'],
+  BASE_DESDE: '2026-10-21',          // primeiro dia gravado (os cálculos usam o histórico todo)
+  CHANNEL_GROUP: 'Influence',
+  CHANNEL: 'Influencers',
+  FORMATO_DATA_BASE: 'yyyy-mm-dd',
+  // Métrica -> campo(s) do acumulador
+  METRICAS: {
+    'Sessions': ['sessoes'],
+    'Quest started': ['quest'],
+    'Recommendations': ['recs'],
+    'Checkout started': ['checkout'],
+    'Orders': ['orders'],
+    'Payment Completed': ['pagos'],
+    'Acquisitions': ['acq'],
+    'Spend': ['fixo', 'comissao', 'campanha', 'medicacao']
+  },
   COLUNAS_CONTEUDOS: ['Data', 'Cupom', 'Plataforma', 'Formato', 'Quantidade'],
 
   NEKT_MCP_URL: 'https://mcp.nekt.com/mcp',
