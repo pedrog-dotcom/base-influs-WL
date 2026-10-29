@@ -96,12 +96,12 @@ var CFG = {
   },
 
   // Mixpanel direto (Query API, residência EU). Board "Voy Saude BR Full funnel":
-  // https://eu.mixpanel.com/project/2829492/view/3363500/app/boards#id=11539194 (report 92920568)
+  // https://eu.mixpanel.com/project/2829492/view/3363500/app/boards#id=11539194 (report 93726547, últimos 30 dias)
   MIXPANEL: {
     API_BASE: 'https://eu.mixpanel.com/api/query',
     PROJECT_ID: '2829492',
     WORKSPACE_ID: '3363500',
-    FUNIL_REPORT_ID: '92920568',
+    FUNIL_REPORT_ID: '93726547',
     CUPOM_OUTROS: '(OUTROS NO MIXPANEL)'   // '$other': cupons além do limite de 200 segmentos do report
   },
 

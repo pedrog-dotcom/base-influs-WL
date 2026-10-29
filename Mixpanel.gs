@@ -98,7 +98,8 @@ function debugMixpanel() {
   var fim = ontemISO_(), ini = somaDias_(fim, -6);
   var linhas = funilMixpanel_(ini, fim), tot = 0, outros = 0, cupons = {};
   linhas.forEach(function (l) { tot += l.sessoes; cupons[l.cupom] = 1; if (l.cupom === CFG.MIXPANEL.CUPOM_OUTROS) outros += l.sessoes; });
-  var msg = 'Mixpanel ' + ini + ' a ' + fim + ': ' + tot + ' sessões em ' + Object.keys(cupons).length + ' cupons; ' +
+  var jan = mpJanelaReport_();
+  var msg = 'Report ' + CFG.MIXPANEL.FUNIL_REPORT_ID + ' cobre ' + jan.ini + ' a ' + jan.fim + '. Mixpanel ' + ini + ' a ' + fim + ': ' + tot + ' sessões em ' + Object.keys(cupons).length + ' cupons; ' +
     CFG.MIXPANEL.CUPOM_OUTROS + ' = ' + outros + ' (' + (tot ? (100 * outros / tot).toFixed(1) : 0) + '%).';
   logar_('DEBUG', 'ok', linhas.length, msg);
   try { SpreadsheetApp.getUi().alert(msg); } catch (e) { console.log(msg); }
