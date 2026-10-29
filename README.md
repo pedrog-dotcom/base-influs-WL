@@ -10,7 +10,7 @@ Colunas: `Data | Channel Group | Channel | Subchannel | Metrica | Valor`. Channe
 |---|---|
 | Sessions, Quest started, Recommendations, Checkout started | funil do Mixpanel (ver abaixo) |
 | Orders | pedidos com o cupom, na data do checkout |
-| Payment Completed | pedidos com pagamento concluído (confirmados ou não), na data do pagamento |
+| Payment Completed | pedidos com o cupom que tiveram o pagamento concluído, na data do checkout (subconjunto de Orders) |
 | Acquisitions | pedidos confirmados, na data do pagamento |
 | Spend | custo fixo + comissão + campanha de incentivo + medicação |
 

@@ -53,8 +53,8 @@ function atualizarBase_() {
     if (v.data >= ini && v.data <= fim) accAdd_(acc, v.data, v.cupom, 'orders', 1);
     // Acquisitions: pedidos confirmados, na data de conclusão do pagamento
     if (v.confirmado && v.data_pag && v.data_pag >= ini && v.data_pag <= fim) accAdd_(acc, v.data_pag, v.cupom, 'acq', 1);
-    // Payment Completed: pedidos com pagamento concluído (confirmados ou não), na data do pagamento
-    if (v.pago && v.data_pag >= ini && v.data_pag <= fim) accAdd_(acc, v.data_pag, v.cupom, 'pagos', 1);
+    // Payment Completed: pedidos do dia (data do checkout) que tiveram o pagamento concluído
+    if (v.pago && v.data >= ini && v.data <= fim) accAdd_(acc, v.data, v.cupom, 'pagos', 1);
   });
 
   custoFixo_(iris, acc, ini, fim);
