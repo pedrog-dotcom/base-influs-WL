@@ -77,6 +77,12 @@ function funilMixpanel_(iniISO, fimISO) {
   return Object.keys(linhas).map(function (k) { return linhas[k]; });
 }
 
+/** Período coberto pelo report salvo no board ({ini, fim} em ISO). Só esses dias são regravados no cache. */
+function mpJanelaReport_() {
+  var dr = mpReportFunil_().date_range || {};
+  return { ini: String(dr.from_date || '').slice(0, 10) || null, fim: String(dr.to_date || '').slice(0, 10) || null };
+}
+
 /** Total de sessões do dia no report (todas as campanhas). */
 function mpSessoesDia_(dataISO) {
   var r = mpReportFunil_();

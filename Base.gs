@@ -167,8 +167,11 @@ function escreverAba_(nome, cols, linhas, formatar, formatoData) {
 function atualizarFunilIncremental_() {
   var fim = ontemISO_();
   if (CFG.FUNIL.FONTE === 'MIXPANEL') {
-    // O report devolve o histórico inteiro numa chamada: recarrega tudo desde DATA_INICIO.
-    var n0 = carregarFunil_(CFG.DATA_INICIO, fim);
+    // Regrava só os dias que o report do board cobre (ex.: últimos 30 dias). Dias mais antigos
+    // ficam como estão no cache, então o histórico não se perde quando sai da janela do report.
+    var jan = mpJanelaReport_();
+    var ini0 = maxIso_(CFG.DATA_INICIO, jan.ini || CFG.DATA_INICIO);
+    var n0 = carregarFunil_(ini0, fim);
     checarFrescorMixpanel_(fim);
     return n0;
   }
