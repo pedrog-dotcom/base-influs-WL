@@ -77,6 +77,8 @@ var CFG = {
   // passo 3 Recommendations Loaded / Checkout Started, janela de 1 sessão,
   // filtro e breakdown pelo last touch do passo 1.
   FUNIL: {
+    // 'MIXPANEL' = report do board pela Query API (padrão, sem custo de Nekt); 'NEKT' = SQL no mixpanel_events
+    FONTE: 'MIXPANEL',
     TABELA: 'manual_default.mixpanel_events',
     EV_PAGINA: 'Loaded a Page',
     EV_QUEST: 'Questionnaire Started',
@@ -91,6 +93,16 @@ var CFG = {
     LOOKBACK_HORAS: 24,                           // histórico extra para o last touch e sessões que viram o dia
     JANELA_DIAS: 3,                               // incremental diário: D-1 até D-3
     BACKFILL_DIAS_POR_QUERY: 2                    // ~30 GB lidos por dia de Mixpanel
+  },
+
+  // Mixpanel direto (Query API, residência EU). Board "Voy Saude BR Full funnel":
+  // https://eu.mixpanel.com/project/2829492/view/3363500/app/boards#id=11539194 (report 92920568)
+  MIXPANEL: {
+    API_BASE: 'https://eu.mixpanel.com/api/query',
+    PROJECT_ID: '2829492',
+    WORKSPACE_ID: '3363500',
+    FUNIL_REPORT_ID: '92920568',
+    CUPOM_OUTROS: '(OUTROS NO MIXPANEL)'   // '$other': cupons além do limite de 200 segmentos do report
   },
 
   // Abas

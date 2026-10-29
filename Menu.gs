@@ -4,9 +4,9 @@
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('Base Influencers')
-    .addItem('Atualizar tudo (funil D-1..D-3 + base)', 'executarDiario')
+    .addItem('Atualizar tudo (funil + base)', 'executarDiario')
     .addItem('Reconstruir só a base', 'atualizarBase')
-    .addItem('Atualizar só o funil (D-1..D-3)', 'atualizarFunilIncremental')
+    .addItem('Atualizar só o funil', 'atualizarFunilIncremental')
     .addSeparator()
     .addItem('Backfill do funil desde DATA_INICIO', 'backfillFunil')
     .addItem('Instalar gatilho diário', 'instalarGatilhoDiario')
@@ -14,6 +14,7 @@ function onOpen() {
     .addItem('Testar conexões', 'debugConexoes')
     .addItem('Diagnóstico da Irís (comissão/campanha)', 'debugIris')
     .addItem('Diagnóstico da medicação (CPF)', 'debugMedicacao')
+    .addItem('Diagnóstico do Mixpanel (funil)', 'debugMixpanel')
     .addToUi();
 }
 

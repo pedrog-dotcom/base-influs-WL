@@ -154,6 +154,12 @@ function escreverAba_(nome, cols, linhas, formatar) {
  */
 function atualizarFunilIncremental_() {
   var fim = ontemISO_();
+  if (CFG.FUNIL.FONTE === 'MIXPANEL') {
+    // O report devolve o histórico inteiro numa chamada: recarrega tudo desde DATA_INICIO.
+    var n0 = carregarFunil_(CFG.DATA_INICIO, fim);
+    checarFrescorMixpanel_(fim);
+    return n0;
+  }
   var janela = maxIso_(somaDias_(fim, -(CFG.FUNIL.JANELA_DIAS - 1)), CFG.DATA_INICIO);
   var noCache = {};
   lerCacheFunil_().forEach(function (r) { noCache[r.data] = true; });
@@ -176,6 +182,10 @@ function atualizarFunilIncremental_() {
 
 /** Último dia com eventos do Mixpanel na Nekt; loga aviso se for anterior a fimISO. */
 function checarFrescorMixpanel_(fimISO) {
+  if (CFG.FUNIL.FONTE === 'MIXPANEL') {
+    if (!mpSessoesDia_(fimISO)) logar_('FUNIL', 'aviso', 0, 'Report do Mixpanel sem sessões em ' + fimISO + '. Confira o board.');
+    return;
+  }
   var t = '`' + CFG.FUNIL.TABELA.replace('.', '`.`') + '`';
   var r = nektSql_("SELECT FORMAT_TIMESTAMP('%Y-%m-%d %H:%M', MAX(event_time), 'America/Sao_Paulo') AS ultimo FROM " + t +
     " WHERE event_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY) AND event = " + sqlList_([CFG.FUNIL.EV_PAGINA]));
@@ -189,7 +199,8 @@ function checarFrescorMixpanel_(fimISO) {
 /** Roda o funil de iniISO a fimISO e substitui essas datas no cache. */
 function carregarFunil_(iniISO, fimISO) {
   var t0 = Date.now();
-  var novos = nektSql_(sqlFunil_(iniISO, fimISO)).map(function (r) {
+  var brutos = CFG.FUNIL.FONTE === 'MIXPANEL' ? funilMixpanel_(iniISO, fimISO) : nektSql_(sqlFunil_(iniISO, fimISO));
+  var novos = brutos.map(function (r) {
     return { data: r.data, cupom: normCupom_(r.cupom), sessoes: +r.sessoes || 0, quest: +r.quest || 0, recs: +r.recs || 0, checkout: +r.checkout || 0 };
   });
   var mantidos = lerCacheFunil_().filter(function (r) { return r.data < iniISO || r.data > fimISO; });

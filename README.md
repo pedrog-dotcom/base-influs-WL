@@ -1,6 +1,6 @@
 # Base Influencers WL (Voy BR)
 
-> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos e conteúdos da Irís (Supabase), vendas do lake (Nekt), custo de medicação do lake (BigQuery) e funil do Mixpanel (Nekt), em duas abas: a base geral (uma linha por **Data x Cupom**) e a base de conteúdos.
+> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos e conteúdos da Irís (Supabase), vendas do lake (Nekt), custo de medicação do lake (BigQuery) e funil do Mixpanel (Query API, report do board), em duas abas: a base geral (uma linha por **Data x Cupom**) e a base de conteúdos.
 
 ## Saída 1: aba `BASE_INFLUENCERS_WL` (base geral)
 
@@ -12,7 +12,7 @@
 | Custo de comissão | Irís: `sale_bands` dos termos vigentes, por ordinal de venda no mês (`tier_counter_scope`), aplicado às vendas pagas da Nekt. Mesma lógica do `calcular_pagamento` |
 | Custo de campanha de incentivo | Irís: `commission_campaigns` ativas ou encerradas (`bonus_por_venda`, `bonus_meta`, `troca_faixa`: a diferença sobre a faixa padrão) |
 | Custo de medicação | Lake no BigQuery (`manual-data-team.prod`): gross revenue dos pedidos Voy/Brazil com desconto >= 90% (vendas gratuitas) de clientes cuja order de aquisição usou `voy_br_influvoy_4_99off` ou `voy_br_influvoy_99`, na data de conclusão do pagamento. O CPF do cliente (`dim_customer.cpf_number`) é cruzado com o CPF do creator em `manual_silver.creators` (Nekt) e o custo vai para o `referral_code` do creator. Sem creator correspondente: linha `(MEDICACAO SEM CREATOR)`. Nenhum CPF é gravado na planilha |
-| Sessões / Quest started / Recommendations / Checkout started | Mixpanel bruto (`manual_default.mixpanel_events`), réplica do board "Voy Saude BR Full funnel": sessões com Loaded a Page (topo de funil) → Questionnaire Started → Recommendations Loaded / Checkout Started na mesma sessão; filtro last touch `utm_source` in (influencer, Influencers), breakdown por `utm_campaign` |
+| Sessões / Quest started / Recommendations / Checkout started | Mixpanel direto pela Query API (Insights) com service account: report 92920568 do board "Voy Saude BR Full funnel" (projeto 2829492, EU), breakdown por "Last touch UTM campaign name". Uma chamada traz o histórico inteiro; o cache é recarregado desde `DATA_INICIO` a cada execução. Dias no fuso do projeto do Mixpanel. Cupons além do limite de 200 segmentos do report caem em `(OUTROS NO MIXPANEL)`. `CFG.FUNIL.FONTE = 'NEKT'` volta para o SQL no `mixpanel_events` |
 | Orders | Nekt, regra do SQL do pace: pedidos Voy/Brazil com `promotion_code = voy_br_coupon_15_influencer`, todos os contextos e status, na data do checkout. Creators híbridas (`CUPONS_HIBRIDOS`: ISAVOY, CARINAVOY/CARINA40) entram com qualquer promotion code |
 | Acquisitions | Mesmos pedidos, só os confirmados (`is_confirmed`, qualquer `order_context`), na data de conclusão do pagamento |
 
@@ -40,6 +40,7 @@ Mapeamento formato da Irís → plataforma/formato em `CFG.FORMATOS`.
 - **Medicacao.gs**: cruzamento CPF do cliente x CPF do creator e custo de medicação por cupom
 - **Conteudos.gs**: base de conteúdos (Data, Cupom, Plataforma, Formato, Quantidade)
 - **Util.gs**: datas ISO e acumulador
+- **Mixpanel.gs**: cliente da Query API do Mixpanel (service account em `MIXPANEL_SA_USER`, `MIXPANEL_SA_SECRET`, `MIXPANEL_PROJECT_ID`) e leitura do report do funil
 - **Base.gs**: orquestração, cache do funil, backfill, log, alerta e gatilho
 - **Menu.gs**: menu "Base Influencers" e diagnósticos
 
