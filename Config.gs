@@ -57,12 +57,17 @@ var CFG = {
   FIXO_STATUS_CONTRATO: ['active', 'ended'],   // paused só entra nos meses com ciclo aberto
   CUPONS_IGNORAR: ['CUPOMTESTE', 'TEESTE'],     // cadastros de teste na Irís
 
-  // Comissão (sale_bands de contract_terms) e campanhas (commission_campaigns):
+  // Comissão (sale_bands de contract_terms) e campanhas (commission_campaigns ativas ou encerradas):
   //   COMISSAO_JANELA 'IRIS'     = igual ao calcular_pagamento: começa na 1ª peça publicada
   //                                (ou em starts_on se o contrato renova outro)
-  //                   'CONTRATO' = começa em starts_on
+  //                   'CONTRATO' = começa em starts_on (padrão enquanto a publicação das peças
+  //                                não é registrada na Irís)
   //   Vendas elegíveis: pedidos com pagamento concluído (mesmo critério do attributed_sales)
-  COMISSAO_JANELA: 'IRIS',
+  COMISSAO_JANELA: 'CONTRATO',
+  // PROTÓTIPO: antecipa a comissão. As faixas entraram na Irís em 29/10/2026; com a simulação,
+  // vendas a partir de 'inicio' usam os termos vigentes em 'termosDe' e vendas antes de 'inicio'
+  // não geram comissão nem contam na faixa. Em produção: COMISSAO_SIMULACAO: null.
+  COMISSAO_SIMULACAO: { inicio: '2026-10-22', termosDe: '2026-10-29' },
 
   // Funil (Mixpanel bruto na Nekt). Réplica do board "Voy Saude BR Full funnel":
   // passo 1 Loaded a Page (filtro de topo de funil), passo 2 Questionnaire Started,

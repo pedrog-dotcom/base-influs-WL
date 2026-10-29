@@ -22,6 +22,7 @@ function executarDiario() {
 
 function atualizarBase() {
   comLock_(function () {
+    try { atualizarFunilIncremental_(); } catch (e) { logar_('FUNIL', 'erro', 0, e); }
     try { atualizarBase_(); } catch (e) { logar_('BASE', 'erro', 0, e); throw e; }
   });
 }
@@ -147,10 +148,33 @@ function escreverAba_(nome, cols, linhas, formatar) {
  * Funil (cache em _cache_funil, porque cada dia de Mixpanel lê ~30 GB)
  * ========================================================================= */
 
+/**
+ * Funil incremental: recarrega D-1..D-(JANELA_DIAS) e também qualquer buraco desde o último dia
+ * em cache (ex.: dias sem execução). Avisa no _log se o Mixpanel da Nekt não tem dados de D-1.
+ */
 function atualizarFunilIncremental_() {
   var fim = ontemISO_();
   var ini = maxIso_(somaDias_(fim, -(CFG.FUNIL.JANELA_DIAS - 1)), CFG.DATA_INICIO);
-  return carregarFunil_(ini, fim);
+  var ultimo = lerCacheFunil_().reduce(function (m, r) { return maxIso_(m, r.data); }, null);
+  if (ultimo) ini = maxIso_(minIso_(ini, somaDias_(ultimo, 1)), CFG.DATA_INICIO);
+  var n = 0;
+  for (var a = ini; a <= fim; a = somaDias_(a, CFG.FUNIL.BACKFILL_DIAS_POR_QUERY)) {
+    n += carregarFunil_(a, minIso_(somaDias_(a, CFG.FUNIL.BACKFILL_DIAS_POR_QUERY - 1), fim));
+  }
+  checarFrescorMixpanel_(fim);
+  return n;
+}
+
+/** Último dia com eventos do Mixpanel na Nekt; loga aviso se for anterior a fimISO. */
+function checarFrescorMixpanel_(fimISO) {
+  var t = '`' + CFG.FUNIL.TABELA.replace('.', '`.`') + '`';
+  var r = nektSql_("SELECT FORMAT_TIMESTAMP('%Y-%m-%d %H:%M', MAX(event_time), 'America/Sao_Paulo') AS ultimo FROM " + t +
+    " WHERE event_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY) AND event = " + sqlList_([CFG.FUNIL.EV_PAGINA]));
+  var ultimo = r.length ? r[0].ultimo : null;
+  if (!ultimo || ultimo.slice(0, 10) < fimISO || ultimo.slice(11) < '23:00' && ultimo.slice(0, 10) === fimISO) {
+    logar_('FUNIL', 'aviso', 0, 'Mixpanel na Nekt (fonte mixpanel-gSWB) só tem eventos até ' + (ultimo || 'sem dados nos últimos 7 dias') +
+      '. O funil dos dias seguintes fica incompleto até a fonte voltar a carregar.');
+  }
 }
 
 /** Roda o funil de iniISO a fimISO e substitui essas datas no cache. */

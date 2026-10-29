@@ -152,6 +152,9 @@ function custoFixo_(iris, acc, iniISO, fimISO) {
  *    (a comissão fica com o preço padrão, a diferença vai para campanha)
  */
 function comissaoECampanha_(iris, vendas, acc, iniISO, fimISO) {
+  var sim = CFG.COMISSAO_SIMULACAO || null;
+  // Data usada para achar os termos (faixas) da venda; na simulação, antecipa os termos de sim.termosDe.
+  function dataTermos(d) { return (sim && d >= sim.inicio && d < sim.termosDe) ? sim.termosDe : d; }
   var primeiraPublicacao = {}, cicloContrato = {};
   iris.ciclos.forEach(function (cy) { cicloContrato[cy.id] = cy.contract_id; });
   iris.pecas.forEach(function (p) {
@@ -164,6 +167,7 @@ function comissaoECampanha_(iris, vendas, acc, iniISO, fimISO) {
   iris.contratos.forEach(function (c) {
     var ini = (c.previous_contract_id || CFG.COMISSAO_JANELA === 'CONTRATO') ? c.starts_on : primeiraPublicacao[c.id];
     if (!ini) return;
+    if (sim) ini = maxIso_(ini, sim.inicio);
     (contratosPorInfluencer[c.influencer_id] = contratosPorInfluencer[c.influencer_id] || []).push({
       c: c, ini: ini, fim: c.commission_extended_until || c.ends_on || null
     });
@@ -191,12 +195,13 @@ function comissaoECampanha_(iris, vendas, acc, iniISO, fimISO) {
     cand.sort(function (a, b) { return a.c.starts_on < b.c.starts_on ? 1 : -1; });
     var c = cand[0].c;
 
-    var tMes = termosNaData_(iris, c.id, inicioMes_(v.data)) || termosNaData_(iris, c.id, v.data);
+    var dt = dataTermos(v.data);
+    var tMes = termosNaData_(iris, c.id, maxIso_(inicioMes_(v.data), dt)) || termosNaData_(iris, c.id, dt);
     var escopo = (tMes && tMes.tier_counter_scope) || 'month';
     var part = escopo === 'contract' ? c.id : c.id + ':' + inicioMes_(v.data);
     var ord = ordinal[part] = (ordinal[part] || 0) + 1;
 
-    var t = termosNaData_(iris, c.id, v.data);
+    var t = termosNaData_(iris, c.id, dt);
     var padrao = precoFaixa_(t && t.sale_bands, ord);
     var grava = v.data >= iniISO && v.data <= fimISO;
     if (grava) accAdd_(acc, v.data, v.cupom, 'comissao', padrao / 100);

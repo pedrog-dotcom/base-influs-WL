@@ -10,7 +10,7 @@
 | Cupom | `promotion_coupon_code` do lake = `utm_campaign` do Mixpanel = `referral_code` da Irís, em maiúsculas |
 | Custo fixo | Irís, metodologia do Control Tower (`FIXO_MODO = 'CONTRATO'`): valor total do contrato dividido igualmente por todos os dias do contrato. Valor total = soma do fixo mensal (`contract_terms_ranges`) de cada mês que o contrato toca. Contrato sem data de fim: fixo mensal / dias do mês. Peças com `unit_value_cents` entram na data de publicação. Alternativas: `'DIARIZADO'` (fixo do mês / dias ativos no mês) e `'PECA'` (regra de pagamento) |
 | Custo de comissão | Irís: `sale_bands` dos termos vigentes, por ordinal de venda no mês (`tier_counter_scope`), aplicado às vendas pagas da Nekt. Mesma lógica do `calcular_pagamento` |
-| Custo de campanha de incentivo | Irís: `commission_campaigns` ativas (`bonus_por_venda`, `bonus_meta`, `troca_faixa`: a diferença sobre a faixa padrão) |
+| Custo de campanha de incentivo | Irís: `commission_campaigns` ativas ou encerradas (`bonus_por_venda`, `bonus_meta`, `troca_faixa`: a diferença sobre a faixa padrão) |
 | Custo de medicação | Lake no BigQuery (`manual-data-team.prod`): gross revenue dos pedidos Voy/Brazil com desconto >= 90% (vendas gratuitas) de clientes cuja order de aquisição usou `voy_br_influvoy_4_99off` ou `voy_br_influvoy_99`, na data de conclusão do pagamento. O CPF do cliente (`dim_customer.cpf_number`) é cruzado com o CPF do creator em `manual_silver.creators` (Nekt) e o custo vai para o `referral_code` do creator. Sem creator correspondente: linha `(MEDICACAO SEM CREATOR)`. Nenhum CPF é gravado na planilha |
 | Sessões / Quest started / Recommendations / Checkout started | Mixpanel bruto (`manual_default.mixpanel_events`), réplica do board "Voy Saude BR Full funnel": sessões com Loaded a Page (topo de funil) → Questionnaire Started → Recommendations Loaded / Checkout Started na mesma sessão; filtro last touch `utm_source` in (influencer, Influencers), breakdown por `utm_campaign` |
 | Orders | Nekt, regra do SQL do pace: pedidos Voy/Brazil com `promotion_code = voy_br_coupon_15_influencer`, todos os contextos e status, na data do checkout. Creators híbridas (`CUPONS_HIBRIDOS`: ISAVOY, CARINAVOY/CARINA40) entram com qualquer promotion code |
@@ -55,7 +55,7 @@ Mapeamento formato da Irís → plataforma/formato em `CFG.FORMATOS`.
 3. Menu **Base Influencers > Testar conexões** e **Diagnóstico da medicação (CPF)**.
 4. **Backfill do funil desde DATA_INICIO** (continua sozinho por gatilho até terminar; ver `_log`).
 5. **Reconstruir só a base**.
-6. **Instalar gatilho diário** (≈ 7h40: funil D-1..D-3 + base inteira).
+6. **Instalar gatilho diário**. "Reconstruir só a base" também atualiza o funil dos dias que faltam no cache; se o Mixpanel da Nekt estiver atrasado, o `_log` avisa até quando há eventos (≈ 7h40: funil D-1..D-3 + base inteira).
 
 ## Plug-and-play da comissão
 
@@ -70,7 +70,8 @@ switch_bands:  [{"from": 1, "cents": 40000}]
 
 ## Premissas e limites
 
-- **Janela da comissão** (`COMISSAO_JANELA = 'IRIS'`): igual à Irís, a comissão só começa na 1ª peça publicada do contrato (ou em `starts_on` se o contrato renova outro). Hoje quase todas as peças estão `sem_data`, então mesmo com faixas preenchidas a comissão fica zerada até haver publicação. `'CONTRATO'` usa `starts_on`.
+- **Janela da comissão** (`COMISSAO_JANELA = 'CONTRATO'`): a comissão começa em `starts_on` do contrato, porque a publicação das peças ainda não é registrada na Irís. `'IRIS'` replica o `calcular_pagamento` (começa na 1ª peça publicada).
+- **Simulação do protótipo** (`COMISSAO_SIMULACAO`): as faixas entraram na Irís em 29/10/2026; com `{inicio: '2026-10-22', termosDe: '2026-10-29'}` as vendas desde 22/10 usam os termos de 29/10 e vendas anteriores não geram comissão. Em produção: `null`.
 - **Vendas da comissão**: pedidos com pagamento concluído (`payment_completed_at`), 1 unidade por pedido, contados pela ordem do checkout. A Irís usa a própria sincronização (`attributed_sales`), que hoje registra menos pedidos que o lake (ex.: out/26: 339 na Irís x 457 pagos no lake), porque só casa cupons de influenciadoras com contrato. A base segue o lake.
 - **troca_faixa**: o ordinal da campanha conta só vendas dentro do período da campanha.
 - **Custo fixo diarizado** cobre contratos `active`/`ended` em todos os meses do contrato e `paused` só nos meses com ciclo aberto. Pode diferir do pago quando há peças glosadas.

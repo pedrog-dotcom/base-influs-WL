@@ -40,7 +40,7 @@ function carregarIris_() {
     .filter(function (p) { return idsCiclo[p.cycle_id]; });
 
   var campanhas = sbSelect_('commission_campaigns', 'id,name,kind,starts_on,ends_on,per_sale_cents,goal_sales,bonus_cents,switch_bands,status',
-    'status=eq.ativa&category_id=eq.' + catId);
+    'status=in.(ativa,encerrada)&category_id=eq.' + catId);   // encerrada: custo do período em que valeu
   var campanhaContratos = {};
   sbSelect_('commission_campaign_contracts', 'campaign_id,contract_id').forEach(function (r) {
     (campanhaContratos[r.campaign_id] = campanhaContratos[r.campaign_id] || []).push(r.contract_id);
