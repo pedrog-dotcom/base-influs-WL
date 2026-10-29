@@ -45,18 +45,18 @@ var CFG = {
   TABELA_CREATORS: 'manual_silver.creators',
   CUPOM_MEDICACAO_SEM_CREATOR: '(MEDICACAO SEM CREATOR)',
 
-  // Custo fixo:
-  //   'CONTRATO'  = metodologia do Control Tower (padrão): valor total do contrato dividido
-  //                 igualmente por todos os dias do contrato. Total = soma do fixo mensal de
-  //                 cada mês que o contrato toca. Sem data de fim: fixo mensal / dias do mês.
-  //   'DIARIZADO' = fixo mensal dividido pelos dias de contrato ativos em cada mês
-  //   'PECA'      = regra de pagamento da Irís: fixo / peças do ciclo, reconhecido na data
-  //                 de publicação de cada peça entregue (hoje quase todas estão 'sem_data')
+  // Custo fixo (valor do contrato é MENSAL):
+  //   'DIARIZADO' = (padrão) em cada mês em que o contrato está ativo, o fixo mensal é dividido
+  //                 igualmente pelos dias de contrato naquele mês: de max(1º dia do mês, starts_on)
+  //                 até min(último dia do mês, ends_on). Contrato sem ends_on segue mês a mês,
+  //                 com o fixo mensal inteiro espalhado pelos dias de contrato de cada mês.
+  //   'CONTRATO'  = metodologia antiga do Control Tower: total do contrato / todos os dias do contrato
+  //   'PECA'      = regra de pagamento da Irís: fixo / peças do ciclo, na data de publicação
   // Peças com valor próprio (unit_value_cents) entram sempre na data de publicação.
-  FIXO_MODO: 'CONTRATO',
-  // Contrato sem ends_on: 'FIM_DO_MES' = termina no último dia do mês de starts_on
-  // (contratos duram até um mês; renovação abre nova linha). null = sem fim (rateio mês a mês).
-  CONTRATO_SEM_FIM: 'FIM_DO_MES',
+  FIXO_MODO: 'DIARIZADO',
+  // Contrato sem ends_on: null = segue em aberto mês a mês (padrão). 'FIM_DO_MES' = termina
+  // no último dia do mês de starts_on.
+  CONTRATO_SEM_FIM: null,
   FIXO_STATUS_CONTRATO: ['active', 'ended'],   // paused só entra nos meses com ciclo aberto
   CUPONS_IGNORAR: ['CUPOMTESTE', 'TEESTE'],     // cadastros de teste na Irís
 
