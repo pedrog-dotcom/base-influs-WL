@@ -11,7 +11,7 @@
  * query: string PostgREST sem o select (ex.: 'status=eq.ativa').
  */
 function sbSelect_(tabela, colunas, query) {
-  var base = String(prop_('SUPABASE_URL')).replace(/\/+$/, '');
+  var base = String(prop_('SUPABASE_URL', false) || CFG.SUPABASE_URL).replace(/\/+$/, '');
   var key = prop_('SUPABASE_SERVICE_KEY');
   var out = [], passo = 1000;
   for (var offset = 0; offset < 1e6; offset += passo) {

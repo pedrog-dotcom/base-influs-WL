@@ -72,32 +72,71 @@ function atualizarBase_() {
 
   var linhas = linhasDaBase_(acc);
   escreverBase_(linhas);
-  var conteudos = linhasConteudos_(iris, ini, fim);
-  escreverConteudos_(conteudos);
+  var conteudos = CFG.ABA_CONTEUDOS ? linhasConteudos_(iris, ini, fim) : [];
+  if (CFG.ABA_CONTEUDOS) escreverConteudos_(conteudos);
   logar_('BASE', 'ok', linhas.length, 'Base ' + (CFG.BASE_DESDE || ini) + ' a ' + fim + ' (' + conteudos.length + ' linhas de conteúdo; medicação: ' +
     med.casados + '/' + med.pedidos + ' pedidos casados por CPF) em ' + Math.round((Date.now() - t0) / 1000) + 's');
   return linhas.length;
 }
 
-/** Formato longo: Data | Channel Group | Channel | Subchannel (cupom) | Metrica | Valor, a partir de BASE_DESDE. */
+/**
+ * Formato longo a partir de BASE_DESDE, só valores != 0:
+ *   com CHANNEL_GROUP: Data | Channel Group | Channel | Subchannel (cupom) | Metrica | Valor
+ *   sem CHANNEL_GROUP: Data | Cupom | Metrica | Valor   (aba auxiliar lida por fórmula)
+ * Com CFG.MAPEAMENTO, o cupom passa pelo de-para da aba de mapeamento antes de agregar.
+ */
 function linhasDaBase_(acc) {
   var desde = CFG.BASE_DESDE || CFG.DATA_INICIO;
-  var nomes = Object.keys(CFG.METRICAS).sort(function (a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : 1; });
-  var out = [];
+  var nomes = Object.keys(CFG.METRICAS);
+  var mapear = mapeadorCupom_();
+  var agg = {};
   Object.keys(acc).forEach(function (k) {
     var r = acc[k];
     if (r.data < desde) return;
+    var cupom = mapear(r.cupom);
     nomes.forEach(function (m) {
       var v = 0;
       CFG.METRICAS[m].forEach(function (c) { v += r[c] || 0; });
-      if (Math.abs(v) > 1e-9) out.push([r.data, CFG.CHANNEL_GROUP, CFG.CHANNEL, r.cupom, m, v]);
+      if (!v) return;
+      var kk = r.data + '|' + cupom + '|' + m;
+      agg[kk] = agg[kk] || { data: r.data, cupom: cupom, m: m, v: 0 };
+      agg[kk].v += v;
     });
   });
-  out.sort(function (a, b) {
-    return a[0] !== b[0] ? (a[0] < b[0] ? -1 : 1) : a[3] !== b[3] ? (a[3] < b[3] ? -1 : 1)
-      : (a[4].toLowerCase() < b[4].toLowerCase() ? -1 : 1);
+  var out = Object.keys(agg).map(function (k) { return agg[k]; })
+    .filter(function (o) { return Math.abs(o.v) > 1e-9; })
+    .sort(function (a, b) {
+      return a.data !== b.data ? (a.data < b.data ? -1 : 1) : a.cupom !== b.cupom ? (a.cupom < b.cupom ? -1 : 1)
+        : (a.m.toLowerCase() < b.m.toLowerCase() ? -1 : 1);
+    });
+  return out.map(function (o) {
+    return CFG.CHANNEL_GROUP ? [o.data, CFG.CHANNEL_GROUP, CFG.CHANNEL, o.cupom, o.m, o.v] : [o.data, o.cupom, o.m, o.v];
   });
-  return out;
+}
+
+/**
+ * De-para de cupom (opcional). CFG.MAPEAMENTO = { aba, pares: [[colOrigem, colDestino], ...] } em
+ * números de coluna (1 = A). A primeira tabela que tiver o cupom (comparação em maiúsculas) vence.
+ */
+function mapeadorCupom_() {
+  var M = CFG.MAPEAMENTO;
+  if (!M) return function (c) { return c; };
+  var sh = SpreadsheetApp.getActive().getSheetByName(M.aba);
+  if (!sh || sh.getLastRow() < 2) return function (c) { return c; };
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getDisplayValues();
+  var tabelas = M.pares.map(function (p) {
+    var t = {};
+    vals.forEach(function (r) {
+      var o = String(r[p[0] - 1] || '').trim().toUpperCase(), d = String(r[p[1] - 1] || '').trim().toUpperCase();
+      if (o && d && !t[o]) t[o] = d;
+    });
+    return t;
+  });
+  return function (c) {
+    var k = String(c || '').toUpperCase();
+    for (var i = 0; i < tabelas.length; i++) if (tabelas[i][k]) return tabelas[i][k];
+    return c;
+  };
 }
 
 function escreverBase_(linhas) {

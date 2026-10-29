@@ -3,7 +3,7 @@
  ****************************************************************************************/
 
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu('Base Influencers')
+  var menu = SpreadsheetApp.getUi().createMenu('Base Influencers')
     .addItem('Atualizar tudo (funil + base)', 'executarDiario')
     .addItem('Reconstruir só a base', 'atualizarBase')
     .addItem('Atualizar só o funil', 'atualizarFunilIncremental')
@@ -14,8 +14,13 @@ function onOpen() {
     .addItem('Testar conexões', 'debugConexoes')
     .addItem('Diagnóstico da Irís (comissão/campanha)', 'debugIris')
     .addItem('Diagnóstico da medicação (CPF)', 'debugMedicacao')
-    .addItem('Diagnóstico do Mixpanel (funil)', 'debugMixpanel')
-    .addToUi();
+    .addItem('Diagnóstico do Mixpanel (funil)', 'debugMixpanel');
+  if (typeof configurarPace === 'function') {
+    menu.addSeparator()
+      .addItem('PACING: aplicar fórmula com corte (Config!B14)', 'configurarPace')
+      .addItem('PACING: voltar fórmula anterior', 'desfazerPace');
+  }
+  menu.addToUi();
 }
 
 /** Confere Supabase e Nekt com consultas pequenas. */

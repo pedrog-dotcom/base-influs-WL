@@ -12,6 +12,7 @@
 
 var CFG = {
   TZ: 'America/Sao_Paulo',
+  SUPABASE_URL: 'https://eupkvybriepteduevrpr.supabase.co',   // usado se a propriedade SUPABASE_URL não existir
 
   // Primeiro dia da base. A comissão precisa do histórico desde o início dos contratos,
   // então as vendas são lidas desde VENDAS_DESDE, mas a base só grava a partir de DATA_INICIO.
@@ -138,6 +139,7 @@ var CFG = {
   CHANNEL_GROUP: 'Influence',
   CHANNEL: 'Influencers',
   FORMATO_DATA_BASE: 'yyyy-mm-dd',
+  MAPEAMENTO: null,                  // de-para de cupom (ver mapeadorCupom_)
   // Métrica -> campo(s) do acumulador
   METRICAS: {
     'Sessions': ['sessoes'],
