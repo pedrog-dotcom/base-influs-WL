@@ -154,12 +154,21 @@ function escreverAba_(nome, cols, linhas, formatar) {
  */
 function atualizarFunilIncremental_() {
   var fim = ontemISO_();
-  var ini = maxIso_(somaDias_(fim, -(CFG.FUNIL.JANELA_DIAS - 1)), CFG.DATA_INICIO);
-  var ultimo = lerCacheFunil_().reduce(function (m, r) { return maxIso_(m, r.data); }, null);
-  if (ultimo) ini = maxIso_(minIso_(ini, somaDias_(ultimo, 1)), CFG.DATA_INICIO);
-  var n = 0;
-  for (var a = ini; a <= fim; a = somaDias_(a, CFG.FUNIL.BACKFILL_DIAS_POR_QUERY)) {
-    n += carregarFunil_(a, minIso_(somaDias_(a, CFG.FUNIL.BACKFILL_DIAS_POR_QUERY - 1), fim));
+  var janela = maxIso_(somaDias_(fim, -(CFG.FUNIL.JANELA_DIAS - 1)), CFG.DATA_INICIO);
+  var noCache = {};
+  lerCacheFunil_().forEach(function (r) { noCache[r.data] = true; });
+  // Dias a carregar: a janela D-1..D-N sempre, e qualquer dia sem linha no cache nos últimos 30 dias.
+  var dias = [];
+  for (var d = maxIso_(somaDias_(fim, -29), CFG.DATA_INICIO); d <= fim; d = somaDias_(d, 1)) {
+    if (d >= janela || !noCache[d]) dias.push(d);
+  }
+  // Agrupa em blocos contíguos de até BACKFILL_DIAS_POR_QUERY dias.
+  var n = 0, i = 0, passo = CFG.FUNIL.BACKFILL_DIAS_POR_QUERY;
+  while (i < dias.length) {
+    var a = dias[i], b = a, k = 1;
+    while (i + k < dias.length && k < passo && dias[i + k] === somaDias_(b, 1)) { b = dias[i + k]; k++; }
+    n += carregarFunil_(a, b);
+    i += k;
   }
   checarFrescorMixpanel_(fim);
   return n;
