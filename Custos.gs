@@ -182,7 +182,7 @@ function comissaoECampanha_(iris, vendas, acc, iniISO, fimISO) {
   });
 
   var ordinal = {}, ordCampanha = {}, metaPaga = {};
-  var ordenadas = vendas.filter(function (v) { return v.pago; }).slice().sort(function (a, b) {
+  var ordenadas = vendas.filter(function (v) { return v.comissionavel != null ? v.comissionavel : v.pago; }).slice().sort(function (a, b) {
     return a.checkout_utc < b.checkout_utc ? -1 : a.checkout_utc > b.checkout_utc ? 1 : String(a.order_number) < String(b.order_number) ? -1 : 1;
   });
 

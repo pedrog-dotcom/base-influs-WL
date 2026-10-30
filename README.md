@@ -9,13 +9,13 @@ Colunas: `Data | Channel Group | Channel | Subchannel | Metrica | Valor`. Channe
 | Metrica | Regra |
 |---|---|
 | Sessions, Quest started, Recommendations, Checkout started | funil do Mixpanel (ver abaixo) |
-| Orders | pedidos com o cupom, na data do checkout |
-| Payment Completed | pedidos com o cupom que tiveram o pagamento concluído, na data do checkout (subconjunto de Orders) |
-| Acquisitions | pedidos confirmados, na data do pagamento |
+| Orders | pedidos com o cupom e `order_context` de aquisição (`acquisition` ou `unconfirmed-acquisition`), todos os status, na data do checkout |
+| Payment Completed | Orders com pagamento concluído, na data do checkout |
+| Acquisitions | pedidos de aquisição confirmados, na data do pagamento |
 | Spend | custo fixo + comissão + campanha de incentivo + medicação |
-| Orders Category | Orders que são o 1º pedido do cliente (`customer_id`) na categoria weight_loss, olhando todos os pedidos dele no Brasil (qualquer cupom e `order_context`), na data do checkout |
-| Payment Completed Category | Orders que são o 1º pedido confirmado do cliente na categoria, na data do checkout |
-| Acquisitions Category | Acquisitions que são o 1º pedido confirmado com pagamento concluído do cliente na categoria, na data do pagamento |
+| Orders Category | ADICIONAL: pedidos de outro `order_context` (reactivation, incremental, ...) que são o 1º pedido do cliente (`customer_id`) na categoria weight_loss, olhando todos os pedidos dele no Brasil, na data do checkout |
+| Payment Completed Category | ADICIONAL: pedidos de outro contexto que são o 1º pedido confirmado do cliente na categoria, na data do checkout |
+| Acquisitions Category | ADICIONAL: pedidos de outro contexto que são o 1º pedido confirmado e pago do cliente na categoria, na data do pagamento |
 
 Regras de cada componente:
 
@@ -25,7 +25,7 @@ Regras de cada componente:
 | Data | Data em Brasília: checkout para Orders, conclusão do pagamento para Acquisitions, 1º passo da sessão para funil, dia de competência para custos |
 | Cupom | `promotion_coupon_code` do lake = `utm_campaign` do Mixpanel = `referral_code` da Irís, em maiúsculas |
 | Custo fixo | Irís, valor mensal do contrato (`FIXO_MODO = 'DIARIZADO'`): em cada mês ativo, o fixo mensal é dividido igualmente pelos dias de contrato no mês, de max(1º dia do mês, início) até min(último dia do mês, fim). Contrato que começa no meio do mês: fixo mensal / dias do início até o fim do mês. Contrato ativo sem data de fim segue mês a mês, com o fixo mensal espalhado por todos os dias do mês. Peças com `unit_value_cents` entram na data de publicação. Alternativas: `'CONTRATO'` (total do contrato / todos os dias) e `'PECA'` (regra de pagamento) |
-| Custo de comissão | Irís: `sale_bands` dos termos vigentes, por ordinal de venda no mês (`tier_counter_scope`), aplicado às vendas pagas da Nekt. Mesma lógica do `calcular_pagamento` |
+| Custo de comissão | Irís: `sale_bands` dos termos vigentes, por ordinal de venda no mês (`tier_counter_scope`), aplicado às vendas comissionáveis: Acquisitions + Acquisitions Category (pedido confirmado e pago, de contexto acquisition ou 1º pedido do cliente na categoria), na data do checkout. Mesma lógica do `calcular_pagamento` |
 | Custo de campanha de incentivo | Irís: `commission_campaigns` ativas ou encerradas (`bonus_por_venda`, `bonus_meta`, `troca_faixa`: a diferença sobre a faixa padrão) |
 | Custo de medicação | Lake no BigQuery (`manual-data-team.prod`): gross revenue dos pedidos Voy/Brazil com desconto >= 90% (vendas gratuitas) de clientes cuja order de aquisição usou `voy_br_influvoy_4_99off` ou `voy_br_influvoy_99`, na data de conclusão do pagamento. O CPF do cliente (`dim_customer.cpf_number`) é cruzado com o CPF do creator em `manual_silver.creators` (Nekt) e o custo vai para o `referral_code` do creator. Sem creator correspondente: linha `(MEDICACAO SEM CREATOR)`. Nenhum CPF é gravado na planilha |
 | Sessões / Quest started / Recommendations / Checkout started | Mixpanel direto pela Query API (Insights) com service account: report 93726547 do board "Voy Saude BR Full funnel" (projeto 2829492, EU), breakdown por "Last touch UTM campaign name". Uma chamada traz o período salvo no report (recomendado: últimos 30 dias); a cada execução só os dias dentro desse período são regravados no `_cache_funil`, e os dias mais antigos ficam guardados. Dias no fuso do projeto do Mixpanel. Cupons além do limite de 200 segmentos do report caem em `(OUTROS NO MIXPANEL)`. `CFG.FUNIL.FONTE = 'NEKT'` volta para o SQL no `mixpanel_events` |

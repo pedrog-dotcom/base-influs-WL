@@ -46,20 +46,27 @@ function atualizarBase_() {
       order_id: r.order_id, order_number: r.order_number, cupom: cupom, data: r.data,
       data_pag: r.data_pag || null, checkout_utc: r.checkout_utc,
       confirmado: String(r.is_confirmed) === 'true', pago: !!r.data_pag,
-      catOrd: String(r.cat_ord) === 'true', catPc: String(r.cat_pc) === 'true', catAcq: String(r.cat_acq) === 'true'
+      catOrd: String(r.cat_ord) === 'true', catPc: String(r.cat_pc) === 'true', catAcq: String(r.cat_acq) === 'true',
+      ctxAcq: String(r.ctx || '').replace(/^unconfirmed-/, '') === CFG.CONTEXTO_AQUISICAO
     };
   });
+  // Comissionável: aquisição confirmada e paga, de contexto acquisition ou adicional da categoria.
+  vendas.forEach(function (v) { v.comissionavel = v.pago && v.confirmado && (v.ctxAcq || v.catAcq); });
   vendas.forEach(function (v) {
-    // Orders: todos os pedidos, na data do checkout
-    if (v.data >= ini && v.data <= fim) accAdd_(acc, v.data, v.cupom, 'orders', 1);
-    // Acquisitions: pedidos confirmados, na data de conclusão do pagamento
-    if (v.confirmado && v.data_pag && v.data_pag >= ini && v.data_pag <= fim) accAdd_(acc, v.data_pag, v.cupom, 'acq', 1);
-    // Payment Completed: pedidos do dia (data do checkout) que tiveram o pagamento concluído
-    if (v.pago && v.data >= ini && v.data <= fim) accAdd_(acc, v.data, v.cupom, 'pagos', 1);
-    // Métricas de categoria: 1º pedido do cliente na categoria (qualquer order_context)
-    if (v.catOrd && v.data >= ini && v.data <= fim) accAdd_(acc, v.data, v.cupom, 'orders_cat', 1);
-    if (v.catPc && v.data >= ini && v.data <= fim) accAdd_(acc, v.data, v.cupom, 'pagos_cat', 1);
-    if (v.catAcq && v.data_pag && v.data_pag >= ini && v.data_pag <= fim) accAdd_(acc, v.data_pag, v.cupom, 'acq_cat', 1);
+    var ck = v.data >= ini && v.data <= fim, pg = !!v.data_pag && v.data_pag >= ini && v.data_pag <= fim;
+    if (v.ctxAcq) {
+      // Orders: pedidos de aquisição, na data do checkout (todos os status)
+      if (ck) accAdd_(acc, v.data, v.cupom, 'orders', 1);
+      // Payment Completed: pedidos de aquisição do dia (checkout) com pagamento concluído
+      if (ck && v.pago) accAdd_(acc, v.data, v.cupom, 'pagos', 1);
+      // Acquisitions: pedidos de aquisição confirmados, na data de conclusão do pagamento
+      if (pg && v.confirmado) accAdd_(acc, v.data_pag, v.cupom, 'acq', 1);
+    } else {
+      // Adicional da categoria: outro contexto, mas 1º pedido do cliente na categoria
+      if (ck && v.catOrd) accAdd_(acc, v.data, v.cupom, 'orders_cat', 1);
+      if (ck && v.catPc) accAdd_(acc, v.data, v.cupom, 'pagos_cat', 1);
+      if (pg && v.catAcq) accAdd_(acc, v.data_pag, v.cupom, 'acq_cat', 1);
+    }
   });
 
   custoFixo_(iris, acc, ini, fim);

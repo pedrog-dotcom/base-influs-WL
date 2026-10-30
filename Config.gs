@@ -24,6 +24,11 @@ var CFG = {
   COUNTRY: 'brazil',
   CATEGORIA_IRIS: 'weight_loss',
   CATEGORIA_LAKE: 'weight_loss',    // order_taxonomy_business_category das métricas "Category"
+  // Orders / Payment Completed / Acquisitions só contam order_context de aquisição ('acquisition' ou
+  // 'unconfirmed-acquisition'). As métricas "Category" são o ADICIONAL: pedidos de outro contexto
+  // (reactivation, incremental, ...) que são o 1º pedido do cliente na categoria. A comissão usa
+  // Acquisitions + Acquisitions Category.
+  CONTEXTO_AQUISICAO: 'acquisition',
 
   // Vendas de influenciador (lake via Nekt), mesma regra do SQL do pace:
   //   Orders       = pedidos com o cupom, todos os status, na data do checkout

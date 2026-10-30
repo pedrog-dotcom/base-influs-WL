@@ -65,6 +65,7 @@ function sqlVendasInfluencer_(desdeISO) {
     "     FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(o.payment_completed_at), 'America/Sao_Paulo'))) AS data_pag,\n" +
     "  FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP(o.system_checkout_at)) AS checkout_utc,\n" +
     "  CAST(o.is_confirmed AS STRING) AS is_confirmed,\n" +
+    "  o.order_context AS ctx,\n" +
     "  CAST(IFNULL(c.cat_ord, FALSE) AS STRING) AS cat_ord,\n" +
     "  CAST(IFNULL(c.cat_pc, FALSE) AS STRING) AS cat_pc,\n" +
     "  CAST(IFNULL(c.cat_acq, FALSE) AS STRING) AS cat_acq\n" +
