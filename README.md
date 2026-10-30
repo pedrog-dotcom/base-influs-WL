@@ -125,6 +125,8 @@ Mesma metodologia e mesmas colunas da WL, num segundo perfil (`PERFIS.HL` em `Co
 - funil: report 93748474 do board de HL no Mixpanel (cache em `_cache_funil_hl`);
 - custo de medicação com a mesma regra da WL (desconto >= 90%, cruzamento por CPF com a base de creators), mas com a promo de aquisição `HL_BR_AFFILIATES_100OFF`, e sem aba de conteúdos.
 
+Na planilha "Influencers PACING V3 - HL", a aba `BASE_INFLUENCERS_HL` traz essa base a partir de 01/11/2026 por fórmula (sem script): `=IFNA(FILTER(IMPORTRANGE(<base>, "BASE_INFLUENCERS_HL!A2:F"), INDEX(IMPORTRANGE(<base>, "BASE_INFLUENCERS_HL!A2:A"))>=DATE(2026,11,1)), "")`. Como o motor recalcula tudo todo dia, a aba cresce um dia por execução.
+
 ## PACING V3 (`pace/Pace.gs`)
 
 Planilha "WL BR | Influencers - PACING V3". Ela é pesada demais para o motor rodar dentro dela (o Apps Script dá timeout ao acessar o documento), então **o motor continua nesta planilha da base** e o pacing só lê a aba `BASE_INFLUENCERS_WL` por IMPORTRANGE.
