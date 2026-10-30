@@ -63,7 +63,7 @@ function debugMedicacao() {
   var ini = inicioMes_(somaDias_(inicioMes_(hojeISO_()), -1)), fim = ontemISO_();
   var acc = novoAcc_();
   var pedidos = bqSql_(sqlMedicacaoLake_(ini));
-  var mapa = mapaCpfCreators_(nektSql_(sqlCreatorsCpf_()));
+  var mapa = carregarIris_().cpfParaRef;
   var r = custoMedicacao_(pedidos, mapa, acc, ini, fim);
   var porCupom = {};
   Object.keys(acc).forEach(function (k) { porCupom[acc[k].cupom] = (porCupom[acc[k].cupom] || 0) + acc[k].medicacao; });
