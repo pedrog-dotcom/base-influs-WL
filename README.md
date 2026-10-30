@@ -117,6 +117,14 @@ Mixpanel --> Nekt mixpanel_events ----------+                         +--> aba B
 
 > Manter esta documentação: ao ligar a base a outro repositório, atualizar este README e o mapa (README/RepoMap.gs) dos repositórios envolvidos.
 
+## Hair Loss (aba `BASE_INFLUENCERS_HL`)
+
+Mesma metodologia e mesmas colunas da WL, num segundo perfil (`PERFIS.HL` em `Config.gs`), rodado pelo mesmo `executarDiario`:
+
+- Irís: categoria `hair_loss`; lake: marca `MANUAL`, `order_taxonomy_business_category = 'hair_loss'`, promo `BR_INFLUENCERS_40_OFF_FIRST_ORDER`;
+- funil: report 93748474 do board de HL no Mixpanel (cache em `_cache_funil_hl`);
+- sem custo de medicação (a regra de medicação por CPF é só da WL) e sem aba de conteúdos.
+
 ## PACING V3 (`pace/Pace.gs`)
 
 Planilha "WL BR | Influencers - PACING V3". Ela é pesada demais para o motor rodar dentro dela (o Apps Script dá timeout ao acessar o documento), então **o motor continua nesta planilha da base** e o pacing só lê a aba `BASE_INFLUENCERS_WL` por IMPORTRANGE.

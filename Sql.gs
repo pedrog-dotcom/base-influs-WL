@@ -9,6 +9,7 @@
  ****************************************************************************************/
 
 function sqlList_(arr) {
+  if (!arr || !arr.length) return 'NULL';   // IN (NULL) não casa nada e mantém o SQL válido
   return arr.map(function (s) { return "'" + String(s).replace(/'/g, "\\'") + "'"; }).join(', ');
 }
 

@@ -29,6 +29,7 @@ var CFG = {
   // (reactivation, incremental, ...) que são o 1º pedido do cliente na categoria. A comissão usa
   // Acquisitions + Acquisitions Category.
   CONTEXTO_AQUISICAO: 'acquisition',
+  MEDICACAO: true,                  // custo de medicação por CPF (só WL)
 
   // Vendas de influenciador (lake via Nekt), mesma regra do SQL do pace:
   //   Orders       = pedidos com o cupom, todos os status, na data do checkout
@@ -164,6 +165,32 @@ var CFG = {
 
   NEKT_MCP_URL: 'https://mcp.nekt.com/mcp',
   NEKT_MAX_PAGINAS: 200
+};
+
+/**
+ * Perfis (uma aba de base por categoria). Cada perfil sobrescreve chaves do CFG durante a sua
+ * execução (ver comPerfil_). WL usa o CFG como está; HL troca marca, categoria, promo, report do
+ * Mixpanel e abas. Medicação por CPF é regra só de WL (MEDICACAO: false no HL).
+ */
+var PERFIS = {
+  WL: {},
+  HL: {
+    BRAND: 'MANUAL',
+    CATEGORIA_IRIS: 'hair_loss',
+    CATEGORIA_LAKE: 'hair_loss',
+    PROMO_INFLUENCER: ['BR_INFLUENCERS_40_OFF_FIRST_ORDER'],
+    CUPONS_HIBRIDOS: [],
+    CUPOM_ALIAS: {},
+    MEDICACAO: false,
+    // https://eu.mixpanel.com/project/2829492/view/3363500/app/boards#id=11478100 (report 93748474)
+    MIXPANEL: {
+      API_BASE: 'https://eu.mixpanel.com/api/query', PROJECT_ID: '2829492', WORKSPACE_ID: '3363500',
+      FUNIL_REPORT_ID: '93748474', CUPOM_OUTROS: '(OUTROS NO MIXPANEL)'
+    },
+    ABA_BASE: 'BASE_INFLUENCERS_HL',
+    ABA_FUNIL: '_cache_funil_hl',
+    ABA_CONTEUDOS: null
+  }
 };
 
 function prop_(nome, obrigatoria) {

@@ -15,18 +15,35 @@
 
 function executarDiario() {
   comLock_(function () {
-    try { atualizarFunilIncremental_(); } catch (e) { logar_('FUNIL', 'erro', 0, e); avisar_('Funil', e); }
-    try { atualizarBase_(); } catch (e) { logar_('BASE', 'erro', 0, e); avisar_('Base', e); throw e; }
+    var erros = [];
+    Object.keys(PERFIS).forEach(function (p) {
+      comPerfil_(p, function () {
+        try { atualizarFunilIncremental_(); } catch (e) { logar_('FUNIL', 'erro', 0, e); avisar_('Funil ' + p, e); }
+        try { atualizarBase_(); } catch (e) { logar_('BASE', 'erro', 0, e); avisar_('Base ' + p, e); erros.push(p + ': ' + e.message); }
+      });
+    });
+    if (erros.length) throw new Error(erros.join(' | '));
   });
 }
 
-function atualizarBase() {
-  comLock_(function () {
-    try { atualizarFunilIncremental_(); } catch (e) { logar_('FUNIL', 'erro', 0, e); }
-    try { atualizarBase_(); } catch (e) { logar_('BASE', 'erro', 0, e); throw e; }
-  });
+function atualizarBase() { executarDiario(); }
+function atualizarFunilIncremental() {
+  comLock_(function () { Object.keys(PERFIS).forEach(function (p) { comPerfil_(p, atualizarFunilIncremental_); }); });
 }
-function atualizarFunilIncremental() { comLock_(atualizarFunilIncremental_); }
+
+/** Roda fn com o CFG do perfil (WL, HL...) e restaura o CFG no fim. */
+var CFG_BASE_ = null;
+function comPerfil_(nome, fn) {
+  if (!CFG_BASE_) CFG_BASE_ = Object.assign({}, CFG);
+  Object.keys(CFG).forEach(function (k) { delete CFG[k]; });
+  Object.assign(CFG, CFG_BASE_, PERFIS[nome] || {}, { PERFIL: nome });
+  MP_CACHE_ = null;
+  try { return fn(); } finally {
+    Object.keys(CFG).forEach(function (k) { delete CFG[k]; });
+    Object.assign(CFG, CFG_BASE_);
+    MP_CACHE_ = null;
+  }
+}
 
 /* =========================================================================
  * Base
@@ -72,7 +89,8 @@ function atualizarBase_() {
   custoFixo_(iris, acc, ini, fim);
   comissaoECampanha_(iris, vendas, acc, ini, fim);
 
-  var med = custoMedicacao_(bqSql_(sqlMedicacaoLake_(ini)), mapaCpfCreators_(nektSql_(sqlCreatorsCpf_())), acc, ini, fim);
+  var med = CFG.MEDICACAO === false ? { casados: 0, pedidos: 0 }
+    : custoMedicacao_(bqSql_(sqlMedicacaoLake_(ini)), mapaCpfCreators_(nektSql_(sqlCreatorsCpf_())), acc, ini, fim);
 
   lerCacheFunil_().forEach(function (r) {
     if (r.data < ini || r.data > fim) return;
@@ -350,7 +368,7 @@ function logar_(etapa, status, linhas, msg) {
   try {
     var sh = aba_(CFG.ABA_LOG, ['Quando', 'Etapa', 'Status', 'Linhas', 'Mensagem']);
     sh.insertRowAfter(1);
-    sh.getRange(2, 1, 1, 5).setValues([[new Date(), etapa, status, linhas, String(msg && msg.message ? msg.message : msg).slice(0, 500)]]);
+    sh.getRange(2, 1, 1, 5).setValues([[new Date(), (CFG.PERFIL ? CFG.PERFIL + ' ' : '') + etapa, status, linhas, String(msg && msg.message ? msg.message : msg).slice(0, 500)]]);
     if (sh.getLastRow() > 501) sh.deleteRows(502, sh.getLastRow() - 501);
   } catch (e) { console.error(e); }
 }
