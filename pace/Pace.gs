@@ -71,7 +71,8 @@ function configurarPace() {
   }
   if (!cfg.getRange('B15').getValue()) {
     cfg.getRange('A15:B15').setValues([['Planilha da base Irís (URL)', PACE.URL_BASE]]);
-    cfg.getRange('C15').setFormula('=IFERROR(IMPORTRANGE(B15, "' + PACE.ABA_BASE + '!A1"), "Liberar acesso: clique aqui e em Permitir acesso")');
+    // Sem IFERROR: o botão "Permitir acesso" só aparece com o erro do IMPORTRANGE à mostra.
+    cfg.getRange('C15').setFormula('=IMPORTRANGE(B15, "' + PACE.ABA_BASE + '!A1")');
   }
 
   var atual = saida.getRange('A2').getFormula();
