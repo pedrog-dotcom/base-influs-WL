@@ -13,6 +13,7 @@
  *
  * configurarPace(): grava Config!A14:C15 (se vazios), guarda a fórmula anterior em Config!B16 e
  * troca a fórmula de A2. desfazerPace() volta a fórmula anterior. Rodar pelo editor.
+ * Nomes do LET não podem parecer referência de célula (ex.: m1, d2): dá #NAME?.
  ****************************************************************************************/
 
 var PACE = {
@@ -37,12 +38,12 @@ function formulaPace_() {
     '  pay, QUERY(FILTER(H_Checkouts!A2:E, H_Checkouts!D2:D<>"", H_Checkouts!C2:C="Yes", H_Checkouts!A2:A>=ini, H_Checkouts!A2:A<=fimV), "select Col1, Col4, sum(Col5) group by Col1, Col4 label sum(Col5) \'\'", 0),',
     '  acq, QUERY(FILTER(H_Checkouts!A2:E, H_Checkouts!D2:D<>"", H_Checkouts!C2:C="Yes", ISNUMBER(H_Checkouts!B2:B), H_Checkouts!B2:B>=ini, H_Checkouts!B2:B<=fimV), "select Col2, Col4, sum(Col5) group by Col2, Col4 label sum(Col5) \'\'", 0),',
     '  imp, IFERROR(IMPORTRANGE(Config!$B$15, "' + PACE.ABA_BASE + '!A2:F"), HSTACK(ini, "", "", "", "", 0)),',
-    '  d, CHOOSECOLS(imp, 1),',
-    '  irs, IFERROR(FILTER(imp, ISNUMBER(d), d>=corte, d>=ini, d<=fim), HSTACK(ini, "", "", "", "", 0)),',
+    '  dts, CHOOSECOLS(imp, 1),',
+    '  irs, IFERROR(FILTER(imp, ISNUMBER(dts), dts>=corte, dts>=ini, dts<=fim), HSTACK(ini, "", "", "", "", 0)),',
     '  cupR, UPPER(TRIM(CHOOSECOLS(irs, 4))),',
-    '  m1, IFERROR(VLOOKUP(cupR, HSTACK(UPPER(TRIM(Mapeamento!$D$2:$D)), Mapeamento!$E$2:$E), 2, FALSE), ""),',
-    '  m2, IFERROR(VLOOKUP(cupR, HSTACK(UPPER(TRIM(Mapeamento!$J$2:$J)), Mapeamento!$K$2:$K), 2, FALSE), ""),',
-    '  cupF, IF(m1<>"", m1, IF(m2<>"", m2, CHOOSECOLS(irs, 4))),',
+    '  mapCup, IFERROR(VLOOKUP(cupR, HSTACK(UPPER(TRIM(Mapeamento!$D$2:$D)), Mapeamento!$E$2:$E), 2, FALSE), ""),',
+    '  mapUtm, IFERROR(VLOOKUP(cupR, HSTACK(UPPER(TRIM(Mapeamento!$J$2:$J)), Mapeamento!$K$2:$K), 2, FALSE), ""),',
+    '  cupF, IF(mapCup<>"", mapCup, IF(mapUtm<>"", mapUtm, CHOOSECOLS(irs, 4))),',
     '  iris, QUERY(HSTACK(CHOOSECOLS(irs, 1), cupF, CHOOSECOLS(irs, 5), CHOOSECOLS(irs, 6)), "select Col1, Col2, Col3, sum(Col4) group by Col1, Col2, Col3 label sum(Col4) \'\'", 0),',
     '  todos, VSTACK(',
     '    HSTACK(CHOOSECOLS(sp, 1), CHOOSECOLS(sp, 2), IF(SEQUENCE(ROWS(sp))>0, "Spend"), CHOOSECOLS(sp, 3)),',
@@ -79,6 +80,8 @@ function configurarPace() {
   if (atual && atual.indexOf('IMPORTRANGE') < 0 && atual.indexOf('H_Iris') < 0) {
     cfg.getRange('A16:B16').setValues([['Fórmula anterior de ' + PACE.ABA_SAIDA + '!A2 (backup)', "'" + atual]]);
   }
+  cfg.getRange('B16').setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+  cfg.setRowHeight(16, 21);
   saida.getRange('A2').setFormula(formulaPace_());
 }
 
