@@ -73,6 +73,13 @@ function lerAba_(nome, a1) {
   return Sheets.Spreadsheets.Values.get(planilhaId_(), faixa_(nome, a1), { valueRenderOption: 'FORMATTED_VALUE' }).values || [];
 }
 
+/** Valores brutos (números, datas como número de série) de uma faixa A1; [] se a aba não existe. */
+function lerAbaValores_(nome, a1) {
+  if (!abas_()[nome]) return [];
+  return Sheets.Spreadsheets.Values.get(planilhaId_(), faixa_(nome, a1),
+    { valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER' }).values || [];
+}
+
 /**
  * Reescreve uma aba inteira: cabeçalho na linha 1 e `linhas` a partir da linha 2 (valores RAW).
  * opts.formatos: [{col: 1, tipo: 'DATE'|'NUMBER'|'TEXT', padrao: 'yyyy-mm-dd'}] aplicados nas linhas de dados.

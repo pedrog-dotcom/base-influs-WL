@@ -100,6 +100,8 @@ function atualizarBase_() {
   });
 
   var linhas = linhasDaBase_(acc);
+  // Histórico antes de BASE_DESDE montado com as abas da própria planilha (só onde CFG.HISTORICO existe).
+  if (CFG.HISTORICO) linhas = linhasHistorico_().concat(linhas);
   escreverBase_(linhas);
   var conteudos = CFG.ABA_CONTEUDOS ? linhasConteudos_(iris, ini, fim) : [];
   if (CFG.ABA_CONTEUDOS) escreverConteudos_(conteudos);
