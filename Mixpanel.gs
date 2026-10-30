@@ -50,8 +50,9 @@ function funilMixpanel_(iniISO, fimISO) {
   var campo = {};
   Object.keys(r.series).forEach(function (met) {
     var k = met.toLowerCase();
-    var c = k.indexOf('session') >= 0 ? 'sessoes' : k.indexOf('quest') >= 0 ? 'quest'
-      : k.indexOf('checkout') >= 0 ? 'checkout' : k.indexOf('recommend') >= 0 ? 'recs' : null;
+    // Ordem importa: no board de HL todas as métricas são "Total Sessions of <evento>".
+    var c = k.indexOf('quest') >= 0 ? 'quest' : k.indexOf('checkout') >= 0 ? 'checkout'
+      : k.indexOf('recommend') >= 0 ? 'recs' : k.indexOf('session') >= 0 ? 'sessoes' : null;
     if (c) campo[met] = c;
   });
   ['sessoes', 'quest', 'recs', 'checkout'].forEach(function (c) {
@@ -86,7 +87,10 @@ function mpJanelaReport_() {
 /** Total de sessões do dia no report (todas as campanhas). */
 function mpSessoesDia_(dataISO) {
   var r = mpReportFunil_();
-  var met = Object.keys(r.series).filter(function (m) { return m.toLowerCase().indexOf('session') >= 0; })[0];
+  var met = Object.keys(r.series).filter(function (m) {
+    var k = m.toLowerCase();
+    return k.indexOf('session') >= 0 && !/quest|checkout|recommend/.test(k);
+  })[0];
   var o = (met && r.series[met].$overall) || {};
   var tot = 0;
   Object.keys(o).forEach(function (ts) { if (ts.slice(0, 10) === dataISO) tot += Number(o[ts]) || 0; });
