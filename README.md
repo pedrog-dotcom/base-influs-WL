@@ -1,6 +1,6 @@
 # Base Influencers WL (Voy BR)
 
-> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos e conteúdos da Irís (Supabase), vendas do lake (Nekt), custo de medicação do lake (BigQuery) e funil do Mixpanel (Query API, report do board), em duas abas: a base geral em formato longo (uma linha por **Data x Cupom x Métrica**, a partir de 21/10/2026) e a base de conteúdos.
+> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos e conteúdos da Irís (Supabase), vendas e custo de medicação do lake (BigQuery) e funil do Mixpanel (Query API, report do board), em duas abas: a base geral em formato longo (uma linha por **Data x Cupom x Métrica**, a partir de 21/10/2026) e a base de conteúdos.
 
 ## Saída 1: aba `BASE_INFLUENCERS_WL` (base geral, formato longo)
 
@@ -28,8 +28,8 @@ Regras de cada componente:
 | Custo de comissão | Irís: `sale_bands` dos termos vigentes, por ordinal de venda no mês (`tier_counter_scope`), aplicado às vendas comissionáveis: Acquisitions + Acquisitions Category (pedido confirmado e pago, de contexto acquisition ou 1º pedido do cliente na categoria), na data do checkout. Mesma lógica do `calcular_pagamento` |
 | Custo de campanha de incentivo | Irís: `commission_campaigns` ativas ou encerradas (`bonus_por_venda`, `bonus_meta`, `troca_faixa`: a diferença sobre a faixa padrão) |
 | Custo de medicação | Lake no BigQuery (`manual-data-team.prod`): gross revenue dos pedidos Voy/Brazil com desconto >= 90% (vendas gratuitas) de clientes cuja order de aquisição usou `voy_br_influvoy_4_99off` ou `voy_br_influvoy_99`, na data de conclusão do pagamento. O CPF do cliente (`dim_customer.cpf_number`) é cruzado com o CPF da influenciadora no `influencer_personal_data` da Irís (única fonte) e o custo vai para o `referral_code` do creator. Sem creator correspondente: linha `(MEDICACAO SEM CREATOR)`. Nenhum CPF é gravado na planilha |
-| Sessões / Quest started / Recommendations / Checkout started | Mixpanel direto pela Query API (Insights) com service account: report 93726547 do board "Voy Saude BR Full funnel" (projeto 2829492, EU), breakdown por "Last touch UTM campaign name". Uma chamada traz o período salvo no report (recomendado: últimos 30 dias); a cada execução só os dias dentro desse período são regravados no `_cache_funil`, e os dias mais antigos ficam guardados. Dias no fuso do projeto do Mixpanel. Cupons além do limite de 200 segmentos do report caem em `(OUTROS NO MIXPANEL)`. `CFG.FUNIL.FONTE = 'NEKT'` volta para o SQL no `mixpanel_events` |
-| Orders | Nekt, regra do SQL do pace: pedidos Voy/Brazil com `promotion_code = voy_br_coupon_15_influencer`, todos os contextos e status, na data do checkout. Creators híbridas (`CUPONS_HIBRIDOS`: ISAVOY, CARINAVOY/CARINA40) entram com qualquer promotion code |
+| Sessões / Quest started / Recommendations / Checkout started | Mixpanel direto pela Query API (Insights) com service account: report 93726547 do board "Voy Saude BR Full funnel" (projeto 2829492, EU), breakdown por "Last touch UTM campaign name". Uma chamada traz o período salvo no report (recomendado: últimos 30 dias); a cada execução só os dias dentro desse período são regravados no `_cache_funil`, e os dias mais antigos ficam guardados. Dias no fuso do projeto do Mixpanel. Cupons além do limite de 200 segmentos do report caem em `(OUTROS NO MIXPANEL)`. |
+| Orders | BigQuery (`prod.fct_orders` + `prod.dim_order_item_discounts`), regra do SQL do pace: pedidos Voy/Brazil com `promotion_code = voy_br_coupon_15_influencer`, todos os contextos e status, na data do checkout. Creators híbridas (`CUPONS_HIBRIDOS`: ISAVOY, CARINAVOY/CARINA40) entram com qualquer promotion code |
 | Acquisitions | Mesmos pedidos, só os confirmados (`is_confirmed`, qualquer `order_context`), na data de conclusão do pagamento |
 
 Valores com precisão cheia; arredondamento só no formato de exibição.
@@ -49,15 +49,15 @@ Mapeamento formato da Irís → plataforma/formato em `CFG.FORMATOS`.
 ## Arquivos
 
 - **Config.gs**: parâmetros (datas, promo codes, modos de fixo e comissão, regras do funil, abas)
-- **Clients.gs**: Supabase via PostgREST (paginado), Nekt via MCP `execute_sql` (mesmo cliente do CRM-WL) e BigQuery (serviço avançado)
-- **Sql.gs**: SQLs da Nekt (vendas, funil, CPF dos creators) e do lake (medicação)
+- **Clients.gs**: Supabase via PostgREST (paginado) e BigQuery (serviço avançado). Não usa a Nekt
+- **Sql.gs**: SQLs do BigQuery: vendas e categoria (`prod.fct_orders` + `prod.dim_order_item_discounts`) e medicação
 - **Iris.gs**: leitura das tabelas da Irís filtradas para `weight_loss`
 - **Custos.gs**: fixo, comissão e campanha de incentivo (lógica pura, testável fora do Apps Script)
 - **Medicacao.gs**: cruzamento CPF do cliente x CPF do creator e custo de medicação por cupom
 - **Conteudos.gs**: base de conteúdos (Data, Cupom, Plataforma, Formato, Quantidade)
 - **Util.gs**: datas ISO e acumulador
 - **Mixpanel.gs**: cliente da Query API do Mixpanel (service account em `MIXPANEL_SA_USER`, `MIXPANEL_SA_SECRET`, `MIXPANEL_PROJECT_ID`) e leitura do report do funil
-- **Base.gs**: orquestração, cache do funil, backfill, log, alerta e gatilho
+- **Base.gs**: orquestração, cache do funil, log, alerta e gatilho
 - **Menu.gs**: menu "Base Influencers" e diagnósticos
 
 ## Instalação
@@ -66,13 +66,12 @@ Mapeamento formato da Irís → plataforma/formato em `CFG.FORMATOS`.
 2. Propriedades do script:
    - `SUPABASE_URL` = `https://eupkvybriepteduevrpr.supabase.co`
    - `SUPABASE_SERVICE_KEY` = service_role key do projeto IRIS
-   - `NEKT_MCP_TOKEN` = token de MCP da Nekt (o do CRM-WL serve)
+   - `MIXPANEL_SA_USER` e `MIXPANEL_SA_SECRET` = service account do Mixpanel
    - `ALERT_EMAIL` (opcional)
    - Serviço avançado **BigQuery API** ativado (já declarado no `appsscript.json`). A conta que executa precisa ler `manual-data-team.prod` e rodar jobs no projeto `manual-data-team`, como no Base-Final-HL.
 3. Menu **Base Influencers > Testar conexões** e **Diagnóstico da medicação (CPF)**.
-4. **Backfill do funil desde DATA_INICIO** (continua sozinho por gatilho até terminar; ver `_log`).
 5. **Reconstruir só a base**.
-6. **Instalar gatilho diário**. "Reconstruir só a base" também atualiza o funil dos dias que faltam no cache; se o Mixpanel da Nekt estiver atrasado, o `_log` avisa até quando há eventos (≈ 7h40: funil D-1..D-3 + base inteira).
+6. **Instalar gatilho diário**. (≈ 7h40: funil dos dias cobertos pelo report do Mixpanel + base inteira). Se o report não tiver sessões de ontem, o `_log` avisa.
 
 ## Plug-and-play da comissão
 
@@ -93,26 +92,25 @@ switch_bands:  [{"from": 1, "cents": 40000}]
 - **troca_faixa**: o ordinal da campanha conta só vendas dentro do período da campanha.
 - **Custo fixo diarizado** cobre contratos `active`/`ended` em todos os meses do contrato e `paused` só nos meses com ciclo aberto. Pode diferir do pago quando há peças glosadas.
 - **Diferença para o pace (Influencers - PACING V3)**: no pace, a lista Cupom → Cupom principal da aba `Mapeamento` está com `#REF!`, então só ~13 cupons recebem Orders/Acquisitions (out/26 até 26/10: 74 orders no pace x 558 no lake). Para esses cupons a base bate exatamente com o pace; a diferença está nos cupons que o pace descarta (XULIA, BORAJUNTAS, SARADA, ECS e outros).
-- **Medicação**: o SQL original conta o gross uma vez por linha de desconto do pedido (`fct_order_discounts`); aqui é uma vez por pedido. Pedidos sem pagamento concluído não entram (sem data de custo). Só 42 dos 61 creators da `manual_silver.creators` têm CPF: medicação de creator sem CPF cadastrado cai em `(MEDICACAO SEM CREATOR)`.
+- **Medicação**: o SQL original conta o gross uma vez por linha de desconto do pedido (`fct_order_discounts`); aqui é uma vez por pedido. Pedidos sem pagamento concluído não entram (sem data de custo). O CPF vem só da Irís (`influencer_personal_data`): medicação de influenciadora sem CPF cadastrado cai em `(MEDICACAO SEM CREATOR)`.
 - **Conteúdos** dependem do preenchimento da Irís: hoje só 15 peças estão `entregue` (todas em 29/09/2026). Outros status de postagem podem entrar via `CFG.CONTEUDO_STATUS`.
 - **Funil**:
-  - O filtro "Voy BR top of funnel filter for acquisitions" não é acessível pela API; a réplica usa domínio `*.voysaude.com.br` e país BR (`CFG.FUNIL`). Ajustar se o filtro tiver mais regras e conferir um dia contra o board (`debugFunilDia`).
-  - Sessão = 30 min de inatividade entre os 4 eventos do funil; last touch olha só `LOOKBACK_HORAS` (24h) para trás. Usuário que voltou depois disso sem UTM não entra como influencer aqui, mas pode entrar no Mixpanel.
-  - Custo de leitura: ~30 GB por dia de Mixpanel. O incremental diário lê ~4 dias (~120 GB); o backfill de jun/26 em diante lê cerca de 6 TB uma única vez (blocos de 2 dias + 1 dia de lookback).
+  - Vem pronto do report do board no Mixpanel (filtros, sessões e last touch definidos lá). O report cobre uma janela móvel (ex.: últimos 30 dias); o cache guarda os dias que saem dela.
 - Cupons que aparecem no lake ou no Mixpanel sem cadastro na Irís continuam na base (sem custo fixo).
 
 ## Recebe dados de / entrega para
 
 - Supabase IRIS (`eupkvybriepteduevrpr`): influencers, contracts, contract_terms_ranges, content_cycles, content_pieces, commission_campaigns, commission_campaign_contracts
-- Nekt: `webhook_v2_orders_lake`, `webhook_v2_order_discounts_lake` (alimentadas pelo Nekt-brazil a partir do lake), `mixpanel_events` e `manual_silver.creators`
+- BigQuery (vendas): `manual-data-team.prod.fct_orders` e `dim_order_item_discounts`. Desde 30/10/2026 a base não usa a Nekt (antes lia `webhook_v2_orders_lake`; os números de 21 a 28/10 batem, e o BigQuery é mais atual)
+- Mixpanel: Query API (report do board)
 - BigQuery: `manual-data-team.prod.fct_orders`, `dim_customer`, `dim_order_item_discounts` (medicação)
 - Entrega: abas `BASE_INFLUENCERS_WL` e `BASE_CONTEUDOS_WL` da planilha vinculada (consumidor a definir; candidato natural: Base-Final-WL / Pacing-WL)
 
 ```
 Irís (Supabase) ----------------------------+                         +--> aba BASE_INFLUENCERS_WL
-Nekt-brazil (lake) --> orders/discounts ----+--> base-influs-WL -------+
+Lake (BigQuery) --> fct_orders/discounts ---+--> base-influs-WL -------+
 Lake (BigQuery) --> medicação por CPF ------+
-Mixpanel --> Nekt mixpanel_events ----------+                         +--> aba BASE_CONTEUDOS_WL
+Mixpanel (Query API, report do board) -----+                         +--> aba BASE_CONTEUDOS_WL
 ```
 
 > Manter esta documentação: ao ligar a base a outro repositório, atualizar este README e o mapa (README/RepoMap.gs) dos repositórios envolvidos.
@@ -123,7 +121,7 @@ Mesma metodologia e mesmas colunas da WL, num segundo perfil (`PERFIS.HL` em `Co
 
 - Irís: categoria `hair_loss`; lake: marca `MANUAL`, `order_taxonomy_business_category = 'hair_loss'`, promo `BR_INFLUENCERS_40_OFF_FIRST_ORDER`;
 - funil: report 93748474 do board de HL no Mixpanel (cache em `_cache_funil_hl`);
-- custo de medicação com a mesma regra da WL (desconto >= 90%, cruzamento por CPF com a base de creators), mas com a promo de aquisição `HL_BR_AFFILIATES_100OFF`, e sem aba de conteúdos.
+- custo de medicação com a mesma regra da WL (desconto >= 90%, cruzamento por CPF com a Irís), mas com a promo de aquisição `HL_BR_AFFILIATES_100OFF`, e sem aba de conteúdos.
 
 Na planilha "Influencers PACING V3 - HL", a aba `BASE_INFLUENCERS_HL` traz essa base a partir de 01/11/2026 por fórmula (sem script): `=IFNA(FILTER(IMPORTRANGE(<base>, "BASE_INFLUENCERS_HL!A2:F"), INDEX(IMPORTRANGE(<base>, "BASE_INFLUENCERS_HL!A2:A"))>=DATE(2026,11,1)), "")`. Como o motor recalcula tudo todo dia, a aba cresce um dia por execução.
 

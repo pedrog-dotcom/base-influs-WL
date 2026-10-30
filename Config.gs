@@ -4,9 +4,10 @@
  * Tudo o que muda de regra de negócio fica aqui. Segredos ficam nas Propriedades do script:
  *   SUPABASE_URL          https://eupkvybriepteduevrpr.supabase.co   (projeto IRIS)
  *   SUPABASE_SERVICE_KEY  service_role key do projeto IRIS (lê tabelas com RLS)
- *   NEKT_MCP_TOKEN        token de MCP da Nekt (o mesmo usado em CRM-WL serve)
- * O custo de medicação lê o lake direto no BigQuery (serviço avançado "BigQuery API",
- * projeto CFG.BQ_PROJECT), com a conta que executa o script, como o Base-Final-HL.
+ *   MIXPANEL_SA_USER      service account do Mixpanel (funil)
+ *   MIXPANEL_SA_SECRET    secret da service account do Mixpanel
+ * Vendas e custo de medicação vêm do lake no BigQuery (serviço avançado "BigQuery API",
+ * projeto CFG.BQ_PROJECT), com a conta que executa o script. Não usa a Nekt.
  *   ALERT_EMAIL           (opcional) destinatário dos avisos de erro
  ****************************************************************************************/
 
@@ -31,7 +32,7 @@ var CFG = {
   CONTEXTO_AQUISICAO: 'acquisition',
   MEDICACAO: true,                  // custo de medicação por CPF (false desliga no perfil)
 
-  // Vendas de influenciador (lake via Nekt), mesma regra do SQL do pace:
+  // Vendas de influenciador (BigQuery, prod.fct_orders + prod.dim_order_item_discounts):
   //   Orders       = pedidos com o cupom, todos os status, na data do checkout
   //   Acquisitions = pedidos confirmados (qualquer order_context), na data de conclusão do pagamento
   PROMO_INFLUENCER: ['voy_br_coupon_15_influencer'],
@@ -44,13 +45,12 @@ var CFG = {
   // Custo de medicação (lake no BigQuery): pedidos com desconto >= MEDICACAO_DESCONTO_MIN
   // (vendas gratuitas) de clientes cuja order de aquisição usou PROMO_MEDICACAO. Custo = gross
   // revenue do pedido, na data de conclusão do pagamento. O CPF do cliente é cruzado com o CPF
-  // do creator em manual_silver.creators (Nekt) e o custo vai para o referral_code do creator.
+  // da influenciadora na Irís (influencer_personal_data) e o custo vai para o cupom dela.
   // CPF sem creator correspondente vai para a linha CUPOM_MEDICACAO_SEM_CREATOR.
   // Os CPFs só são usados em memória: nada de CPF é gravado na planilha.
   BQ_PROJECT: 'manual-data-team',
   PROMO_MEDICACAO: ['voy_br_influvoy_4_99off', 'voy_br_influvoy_99'],
   MEDICACAO_DESCONTO_MIN: 0.9,
-  TABELA_CREATORS: 'manual_silver.creators',
   CUPOM_MEDICACAO_SEM_CREATOR: '(MEDICACAO SEM CREATOR)',
 
   // Custo fixo (valor do contrato é MENSAL):
@@ -79,29 +79,6 @@ var CFG = {
   // vendas a partir de 'inicio' usam os termos vigentes em 'termosDe' e vendas antes de 'inicio'
   // não geram comissão nem contam na faixa. Em produção: COMISSAO_SIMULACAO: null.
   COMISSAO_SIMULACAO: { inicio: '2026-10-22', termosDe: '2026-10-29' },
-
-  // Funil (Mixpanel bruto na Nekt). Réplica do board "Voy Saude BR Full funnel":
-  // passo 1 Loaded a Page (filtro de topo de funil), passo 2 Questionnaire Started,
-  // passo 3 Recommendations Loaded / Checkout Started, janela de 1 sessão,
-  // filtro e breakdown pelo last touch do passo 1.
-  FUNIL: {
-    // 'MIXPANEL' = report do board pela Query API (padrão, sem custo de Nekt); 'NEKT' = SQL no mixpanel_events
-    FONTE: 'MIXPANEL',
-    TABELA: 'manual_default.mixpanel_events',
-    EV_PAGINA: 'Loaded a Page',
-    EV_QUEST: 'Questionnaire Started',
-    EV_RECS: 'Recommendations Loaded',
-    EV_CHECKOUT: 'Checkout Started',
-    // Aproximação do filtro "Voy BR top of funnel filter for acquisitions" (definição
-    // não acessível pela API): domínio da Voy BR e país BR. Ajustar se o filtro tiver mais regras.
-    DOMINIO_SUFIXO: 'voysaude.com.br',
-    PAIS: 'BR',
-    UTM_SOURCES: ['influencer', 'influencers'],   // comparação em minúsculas
-    SESSAO_MIN: 30,                               // timeout de sessão do Mixpanel
-    LOOKBACK_HORAS: 24,                           // histórico extra para o last touch e sessões que viram o dia
-    JANELA_DIAS: 3,                               // incremental diário: D-1 até D-3
-    BACKFILL_DIAS_POR_QUERY: 2                    // ~30 GB lidos por dia de Mixpanel
-  },
 
   // Mixpanel direto (Query API, residência EU). Board "Voy Saude BR Full funnel":
   // https://eu.mixpanel.com/project/2829492/view/3363500/app/boards#id=11539194 (report 93726547, últimos 30 dias)
@@ -161,10 +138,7 @@ var CFG = {
     'Acquisitions Category': ['acq_cat'],
     'Spend': ['fixo', 'comissao', 'campanha', 'medicacao']
   },
-  COLUNAS_CONTEUDOS: ['Data', 'Cupom', 'Plataforma', 'Formato', 'Quantidade'],
-
-  NEKT_MCP_URL: 'https://mcp.nekt.com/mcp',
-  NEKT_MAX_PAGINAS: 200
+  COLUNAS_CONTEUDOS: ['Data', 'Cupom', 'Plataforma', 'Formato', 'Quantidade']
 };
 
 /**

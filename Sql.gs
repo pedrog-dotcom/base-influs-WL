@@ -1,24 +1,16 @@
 /****************************************************************************************
- * Sql.gs: consultas na Nekt (BigQuery). Só montagem de texto; a execução fica nos módulos.
+ * Sql.gs: consultas no BigQuery (lake, projeto CFG.BQ_PROJECT, dataset prod). Só montagem de
+ * texto; a execução (bqSql_) fica em Clients.gs.
  *
- * Tabelas (camada default, alimentadas pelo Nekt-brazil a partir do lake):
- *   manual_default.webhook_v2_orders_lake            1 linha por envio do webhook: deduplicada
- *                                                    pela última _nekt_webhook_received_at
- *   manual_default.webhook_v2_order_discounts_lake   promotion_code / promotion_coupon_code
- *   manual_default.mixpanel_events                   eventos brutos (properties em JSON)
+ * Tabelas:
+ *   prod.fct_orders                 1 linha por pedido (order_context, categoria, datas, is_confirmed)
+ *   prod.dim_order_item_discounts   promotion_code / promotion_coupon_code por item do pedido
+ *   prod.dim_customer               CPF do cliente (só para o custo de medicação, em memória)
  ****************************************************************************************/
 
 function sqlList_(arr) {
   if (!arr || !arr.length) return 'NULL';   // IN (NULL) não casa nada e mantém o SQL válido
   return arr.map(function (s) { return "'" + String(s).replace(/'/g, "\\'") + "'"; }).join(', ');
-}
-
-function sqlOrdersCte_() {
-  return "orders AS (\n" +
-    "  SELECT * FROM `manual_default`.`webhook_v2_orders_lake`\n" +
-    "  WHERE brand_at_checkout = " + sqlList_([CFG.BRAND]) + " AND LOWER(country) = " + sqlList_([CFG.COUNTRY]) + "\n" +
-    "  QUALIFY ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY _nekt_webhook_received_at DESC) = 1\n" +
-    ")";
 }
 
 /**
@@ -36,46 +28,42 @@ function sqlOrdersCte_() {
  *   cat_acq = é o 1º pedido confirmado com pagamento concluído na categoria (pela data do pagamento)
  */
 function sqlVendasInfluencer_(desdeISO) {
-  var conf = "CAST(is_confirmed AS STRING) = 'true'";
-  var pag = "NULLIF(payment_completed_at, '') IS NOT NULL";
-  return "WITH " + sqlOrdersCte_() + ",\n" +
-    "todas AS (\n" +
-    "  SELECT * FROM `manual_default`.`webhook_v2_orders_lake`\n" +
-    "  WHERE LOWER(country) = " + sqlList_([CFG.COUNTRY]) + "\n" +
-    "  QUALIFY ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY _nekt_webhook_received_at DESC) = 1\n" +
-    "),\n" +
-    "cat AS (\n" +
+  var p = '`' + CFG.BQ_PROJECT + '.prod.';
+  var conf = "IFNULL(is_confirmed, FALSE)";
+  var pag = "payment_completed_at IS NOT NULL";
+  var promos = sqlList_(CFG.PROMO_INFLUENCER.map(function (x) { return String(x).toLowerCase(); }));
+  return "WITH cat AS (\n" +
     "  SELECT order_id,\n" +
-    "    ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY TIMESTAMP(system_checkout_at), order_id) = 1 AS cat_ord,\n" +
-    "    IF(" + conf + ", ROW_NUMBER() OVER (PARTITION BY customer_id, " + conf + " ORDER BY TIMESTAMP(system_checkout_at), order_id) = 1, FALSE) AS cat_pc,\n" +
+    "    ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY system_checkout_at, order_id) = 1 AS cat_ord,\n" +
+    "    IF(" + conf + ", ROW_NUMBER() OVER (PARTITION BY customer_id, " + conf + " ORDER BY system_checkout_at, order_id) = 1, FALSE) AS cat_pc,\n" +
     "    IF(" + conf + " AND " + pag + ", ROW_NUMBER() OVER (PARTITION BY customer_id, " + conf + " AND " + pag + "\n" +
-    "       ORDER BY TIMESTAMP(NULLIF(payment_completed_at, '')), order_id) = 1, FALSE) AS cat_acq\n" +
-    "  FROM todas\n" +
-    "  WHERE order_taxonomy_business_category = " + sqlList_([CFG.CATEGORIA_LAKE]) + " AND NULLIF(system_checkout_at, '') IS NOT NULL\n" +
+    "       ORDER BY payment_completed_at, order_id) = 1, FALSE) AS cat_acq\n" +
+    "  FROM " + p + "fct_orders`\n" +
+    "  WHERE LOWER(country) = " + sqlList_([CFG.COUNTRY]) + " AND order_taxonomy_business_category = " + sqlList_([CFG.CATEGORIA_LAKE]) + "\n" +
+    "    AND system_checkout_at IS NOT NULL\n" +
     "),\n" +
     "disc AS (\n" +
     "  SELECT order_id, UPPER(TRIM(ANY_VALUE(promotion_coupon_code))) AS cupom\n" +
-    "  FROM `manual_default`.`webhook_v2_order_discounts_lake`\n" +
-    "  WHERE promotion_code IN (" + sqlList_(CFG.PROMO_INFLUENCER) + ")\n" +
+    "  FROM " + p + "dim_order_item_discounts`\n" +
+    "  WHERE LOWER(promotion_code) IN (" + promos + ")\n" +
     "     OR UPPER(TRIM(promotion_coupon_code)) IN (" + sqlList_(CFG.CUPONS_HIBRIDOS.map(normCupom_)) + ")\n" +
     "  GROUP BY order_id\n" +
     ")\n" +
     "SELECT o.order_id, o.order_number, d.cupom,\n" +
-    "  FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(o.system_checkout_at), 'America/Sao_Paulo')) AS data,\n" +
-    "  IF(NULLIF(o.payment_completed_at, '') IS NULL, NULL,\n" +
-    "     FORMAT_DATE('%Y-%m-%d', DATE(TIMESTAMP(o.payment_completed_at), 'America/Sao_Paulo'))) AS data_pag,\n" +
-    "  FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', TIMESTAMP(o.system_checkout_at)) AS checkout_utc,\n" +
-    "  CAST(o.is_confirmed AS STRING) AS is_confirmed,\n" +
+    "  FORMAT_DATE('%Y-%m-%d', DATE(o.system_checkout_at, 'America/Sao_Paulo')) AS data,\n" +
+    "  IF(o.payment_completed_at IS NULL, NULL, FORMAT_DATE('%Y-%m-%d', DATE(o.payment_completed_at, 'America/Sao_Paulo'))) AS data_pag,\n" +
+    "  FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S', o.system_checkout_at) AS checkout_utc,\n" +
+    "  CAST(IFNULL(o.is_confirmed, FALSE) AS STRING) AS is_confirmed,\n" +
     "  o.order_context AS ctx,\n" +
     "  CAST(IFNULL(c.cat_ord, FALSE) AS STRING) AS cat_ord,\n" +
     "  CAST(IFNULL(c.cat_pc, FALSE) AS STRING) AS cat_pc,\n" +
     "  CAST(IFNULL(c.cat_acq, FALSE) AS STRING) AS cat_acq\n" +
-    "FROM disc d JOIN orders o USING (order_id)\n" +
+    "FROM disc d JOIN " + p + "fct_orders` o USING (order_id)\n" +
     "LEFT JOIN cat c USING (order_id)\n" +
-    "WHERE NULLIF(o.system_checkout_at, '') IS NOT NULL\n" +
-    "  AND (DATE(TIMESTAMP(o.system_checkout_at), 'America/Sao_Paulo') >= DATE '" + desdeISO + "'\n" +
-    "       OR (NULLIF(o.payment_completed_at, '') IS NOT NULL\n" +
-    "           AND DATE(TIMESTAMP(o.payment_completed_at), 'America/Sao_Paulo') >= DATE '" + desdeISO + "'))\n" +
+    "WHERE UPPER(o.brand_at_checkout) = " + sqlList_([String(CFG.BRAND).toUpperCase()]) + " AND LOWER(o.country) = " + sqlList_([CFG.COUNTRY]) + "\n" +
+    "  AND o.system_checkout_at IS NOT NULL\n" +
+    "  AND (DATE(o.system_checkout_at, 'America/Sao_Paulo') >= DATE '" + desdeISO + "'\n" +
+    "       OR DATE(o.payment_completed_at, 'America/Sao_Paulo') >= DATE '" + desdeISO + "')\n" +
     "ORDER BY o.system_checkout_at, o.order_number";
 }
 
@@ -106,68 +94,4 @@ function sqlMedicacaoLake_(desdeISO) {
     "    JOIN " + p + "dim_order_item_discounts` AS d ON d.order_id = a.order_id\n" +
     "    WHERE a.parent_customer_id = o.parent_customer_id AND a.is_acquisition_order\n" +
     "      AND d.promotion_code IN (" + sqlList_(CFG.PROMO_MEDICACAO) + "))";
-}
-
-/** CPF e cupom (referral_code) dos creators, na base de creators da Nekt. */
-function sqlCreatorsCpf_() {
-  return "SELECT UPPER(TRIM(referral_code)) AS cupom,\n" +
-    "  LPAD(REGEXP_REPLACE(cpf, r'\\D', ''), 11, '0') AS cpf\n" +
-    "FROM `" + CFG.TABELA_CREATORS.replace('.', '`.`') + "`\n" +
-    "WHERE NULLIF(TRIM(cpf), '') IS NOT NULL AND NULLIF(TRIM(referral_code), '') IS NOT NULL";
-}
-
-/**
- * Funil por dia e cupom (utm_campaign do last touch no 1º passo), contado em sessões.
- * Sessão: eventos do mesmo distinct_id com intervalo <= SESSAO_MIN.
- * Last touch: último utm_source (com o utm_campaign do mesmo evento) visto até o evento.
- * Lê de (início - LOOKBACK_HORAS) até o fim do dia final, mas só devolve sessões cujo
- * 1º passo cai entre iniISO e fimISO (datas de Brasília, inclusive).
- */
-function sqlFunil_(iniISO, fimISO) {
-  var F = CFG.FUNIL;
-  var t = '`' + F.TABELA.replace('.', '`.`') + '`';
-  var iniTs = "TIMESTAMP_SUB(TIMESTAMP('" + iniISO + " 00:00:00', 'America/Sao_Paulo'), INTERVAL " + F.LOOKBACK_HORAS + " HOUR)";
-  var fimTs = "TIMESTAMP_ADD(TIMESTAMP('" + fimISO + " 00:00:00', 'America/Sao_Paulo'), INTERVAL 1 DAY)";
-  var srcs = sqlList_(F.UTM_SOURCES.map(function (s) { return String(s).toLowerCase(); }));
-  return "WITH ev AS (\n" +
-    "  SELECT distinct_id, event, event_time,\n" +
-    "    LOWER(JSON_VALUE(properties, '$.current_domain')) AS dom,\n" +
-    "    JSON_VALUE(properties, '$.mp_country_code') AS cc,\n" +
-    "    NULLIF(LOWER(TRIM(JSON_VALUE(properties, '$.utm_source'))), '') AS src,\n" +
-    "    NULLIF(UPPER(TRIM(JSON_VALUE(properties, '$.utm_campaign'))), '') AS camp\n" +
-    "  FROM " + t + "\n" +
-    "  WHERE event_time >= " + iniTs + " AND event_time < " + fimTs + "\n" +
-    "    AND event IN (" + sqlList_([F.EV_PAGINA, F.EV_QUEST, F.EV_RECS, F.EV_CHECKOUT]) + ")\n" +
-    "), t AS (\n" +
-    "  SELECT *,\n" +
-    "    LAST_VALUE(IF(src IS NULL, NULL, CONCAT(src, '|', IFNULL(camp, ''))) IGNORE NULLS) OVER w AS touch,\n" +
-    "    IF(LAG(event_time) OVER (PARTITION BY distinct_id ORDER BY event_time) IS NULL\n" +
-    "       OR TIMESTAMP_DIFF(event_time, LAG(event_time) OVER (PARTITION BY distinct_id ORDER BY event_time), SECOND) > " + (F.SESSAO_MIN * 60) + ", 1, 0) AS novo\n" +
-    "  FROM ev\n" +
-    "  WINDOW w AS (PARTITION BY distinct_id ORDER BY event_time ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)\n" +
-    "), s AS (\n" +
-    "  SELECT *, SUM(novo) OVER (PARTITION BY distinct_id ORDER BY event_time ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS sid\n" +
-    "  FROM t\n" +
-    "), sess AS (\n" +
-    "  SELECT distinct_id, sid,\n" +
-    "    ARRAY_AGG(IF(event = " + sqlList_([F.EV_PAGINA]) + " AND ENDS_WITH(IFNULL(dom, ''), " + sqlList_([F.DOMINIO_SUFIXO]) + ") AND cc = " + sqlList_([F.PAIS]) + ",\n" +
-    "      STRUCT(event_time AS ts, touch AS touch), NULL) IGNORE NULLS ORDER BY event_time LIMIT 1)[SAFE_OFFSET(0)] AS p1,\n" +
-    "    ARRAY_AGG(STRUCT(event, event_time)) AS evs\n" +
-    "  FROM s GROUP BY 1, 2\n" +
-    "), f AS (\n" +
-    "  SELECT DATE(p1.ts, 'America/Sao_Paulo') AS dia,\n" +
-    "    SPLIT(p1.touch, '|')[SAFE_OFFSET(0)] AS src,\n" +
-    "    NULLIF(SPLIT(p1.touch, '|')[SAFE_OFFSET(1)], '') AS camp,\n" +
-    "    (SELECT MIN(e.event_time) FROM UNNEST(evs) e WHERE e.event = " + sqlList_([F.EV_QUEST]) + " AND e.event_time >= p1.ts) AS q_ts,\n" +
-    "    evs\n" +
-    "  FROM sess WHERE p1.ts IS NOT NULL\n" +
-    ")\n" +
-    "SELECT FORMAT_DATE('%Y-%m-%d', dia) AS data, IFNULL(camp, '(SEM UTM_CAMPAIGN)') AS cupom,\n" +
-    "  COUNT(*) AS sessoes,\n" +
-    "  COUNTIF(q_ts IS NOT NULL) AS quest,\n" +
-    "  COUNTIF(EXISTS(SELECT 1 FROM UNNEST(evs) e WHERE e.event = " + sqlList_([F.EV_RECS]) + " AND e.event_time >= q_ts)) AS recs,\n" +
-    "  COUNTIF(EXISTS(SELECT 1 FROM UNNEST(evs) e WHERE e.event = " + sqlList_([F.EV_CHECKOUT]) + " AND e.event_time >= q_ts)) AS checkout\n" +
-    "FROM f\n" +
-    "WHERE src IN (" + srcs + ") AND dia BETWEEN DATE '" + iniISO + "' AND DATE '" + fimISO + "'\n" +
-    "GROUP BY 1, 2 ORDER BY 1, 2";
 }

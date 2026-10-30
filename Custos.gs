@@ -141,7 +141,7 @@ function custoFixo_(iris, acc, iniISO, fimISO) {
 /* ---------------- comissão e campanhas ---------------- */
 
 /**
- * Replica a parte de vendas do calcular_pagamento da Irís, usando as vendas da Nekt:
+ * Replica a parte de vendas do calcular_pagamento da Irís, usando as vendas do BigQuery (lake):
  *  - venda elegível: pedido com o cupom da influenciadora e pagamento concluído
  *  - contrato da venda: o de starts_on mais recente cuja janela contém a data do checkout
  *  - ordinal por contrato e mês (tier_counter_scope 'month') ou por contrato ('contract')

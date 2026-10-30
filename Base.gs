@@ -4,13 +4,12 @@
  * ENTRYPOINTS (menu "Base Influencers" ou botão Executar):
  *   executarDiario()             funil incremental (D-1..D-3) + reconstrução da base. Gatilho diário.
  *   atualizarBase()              reconstrói a base inteira (custos e vendas são baratos; o funil vem do cache)
- *   atualizarFunilIncremental()  só o funil, janela CFG.FUNIL.JANELA_DIAS
- *   backfillFunil()              recarrega o funil de DATA_INICIO até D-1 em blocos, continuando por gatilho
+ *   atualizarFunilIncremental()  só o funil (dias cobertos pelo report do Mixpanel)
  *   instalarGatilhoDiario()      cria o gatilho diário (≈ 7h40)
  *
  * Granularidade: 1 linha por dia e cupom com qualquer valor diferente de zero.
- * Custos: fixo, comissão e campanha de incentivo (Irís). Vendas: lake via Nekt.
- * Funil: Mixpanel via Nekt (cache). Conteúdos ficam na aba à parte ABA_CONTEUDOS.
+ * Custos: fixo, comissão e campanha de incentivo (Irís). Vendas e medicação: BigQuery (lake).
+ * Funil: Mixpanel (Query API, cache). Conteúdos ficam na aba à parte ABA_CONTEUDOS.
  ****************************************************************************************/
 
 function executarDiario() {
@@ -56,7 +55,7 @@ function atualizarBase_() {
 
   var iris = carregarIris_();
 
-  var vendas = nektSql_(sqlVendasInfluencer_(minIso_(CFG.VENDAS_DESDE, ini))).map(function (r) {
+  var vendas = bqSql_(sqlVendasInfluencer_(minIso_(CFG.VENDAS_DESDE, ini))).map(function (r) {
     var cupom = normCupom_(r.cupom);
     cupom = CFG.CUPOM_ALIAS[cupom] || cupom;
     return {
@@ -226,64 +225,26 @@ function escreverAba_(nome, cols, linhas, formatar, formatoData) {
 }
 
 /* =========================================================================
- * Funil (cache em _cache_funil, porque cada dia de Mixpanel lê ~30 GB)
+ * Funil (cache, para guardar os dias que saem da janela do report do Mixpanel)
  * ========================================================================= */
 
 /**
- * Funil incremental: recarrega D-1..D-(JANELA_DIAS) e também qualquer buraco desde o último dia
- * em cache (ex.: dias sem execução). Avisa no _log se o Mixpanel da Nekt não tem dados de D-1.
+ * Funil incremental: regrava só os dias que o report do Mixpanel cobre (ex.: últimos 30 dias).
+ * Dias mais antigos ficam como estão no cache, então o histórico não se perde quando sai da
+ * janela do report.
  */
 function atualizarFunilIncremental_() {
   var fim = ontemISO_();
-  if (CFG.FUNIL.FONTE === 'MIXPANEL') {
-    // Regrava só os dias que o report do board cobre (ex.: últimos 30 dias). Dias mais antigos
-    // ficam como estão no cache, então o histórico não se perde quando sai da janela do report.
-    var jan = mpJanelaReport_();
-    var ini0 = maxIso_(CFG.DATA_INICIO, jan.ini || CFG.DATA_INICIO);
-    var n0 = carregarFunil_(ini0, fim);
-    checarFrescorMixpanel_(fim);
-    return n0;
-  }
-  var janela = maxIso_(somaDias_(fim, -(CFG.FUNIL.JANELA_DIAS - 1)), CFG.DATA_INICIO);
-  var noCache = {};
-  lerCacheFunil_().forEach(function (r) { noCache[r.data] = true; });
-  // Dias a carregar: a janela D-1..D-N sempre, e qualquer dia sem linha no cache nos últimos 30 dias.
-  var dias = [];
-  for (var d = maxIso_(somaDias_(fim, -29), CFG.DATA_INICIO); d <= fim; d = somaDias_(d, 1)) {
-    if (d >= janela || !noCache[d]) dias.push(d);
-  }
-  // Agrupa em blocos contíguos de até BACKFILL_DIAS_POR_QUERY dias.
-  var n = 0, i = 0, passo = CFG.FUNIL.BACKFILL_DIAS_POR_QUERY;
-  while (i < dias.length) {
-    var a = dias[i], b = a, k = 1;
-    while (i + k < dias.length && k < passo && dias[i + k] === somaDias_(b, 1)) { b = dias[i + k]; k++; }
-    n += carregarFunil_(a, b);
-    i += k;
-  }
-  checarFrescorMixpanel_(fim);
+  var jan = mpJanelaReport_();
+  var n = carregarFunil_(maxIso_(CFG.DATA_INICIO, jan.ini || CFG.DATA_INICIO), fim);
+  if (!mpSessoesDia_(fim)) logar_('FUNIL', 'aviso', 0, 'Report do Mixpanel sem sessões em ' + fim + '. Confira o board.');
   return n;
-}
-
-/** Último dia com eventos do Mixpanel na Nekt; loga aviso se for anterior a fimISO. */
-function checarFrescorMixpanel_(fimISO) {
-  if (CFG.FUNIL.FONTE === 'MIXPANEL') {
-    if (!mpSessoesDia_(fimISO)) logar_('FUNIL', 'aviso', 0, 'Report do Mixpanel sem sessões em ' + fimISO + '. Confira o board.');
-    return;
-  }
-  var t = '`' + CFG.FUNIL.TABELA.replace('.', '`.`') + '`';
-  var r = nektSql_("SELECT FORMAT_TIMESTAMP('%Y-%m-%d %H:%M', MAX(event_time), 'America/Sao_Paulo') AS ultimo FROM " + t +
-    " WHERE event_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY) AND event = " + sqlList_([CFG.FUNIL.EV_PAGINA]));
-  var ultimo = r.length ? r[0].ultimo : null;
-  if (!ultimo || ultimo.slice(0, 10) < fimISO || ultimo.slice(11) < '23:00' && ultimo.slice(0, 10) === fimISO) {
-    logar_('FUNIL', 'aviso', 0, 'Mixpanel na Nekt (fonte mixpanel-gSWB) só tem eventos até ' + (ultimo || 'sem dados nos últimos 7 dias') +
-      '. O funil dos dias seguintes fica incompleto até a fonte voltar a carregar.');
-  }
 }
 
 /** Roda o funil de iniISO a fimISO e substitui essas datas no cache. */
 function carregarFunil_(iniISO, fimISO) {
   var t0 = Date.now();
-  var brutos = CFG.FUNIL.FONTE === 'MIXPANEL' ? funilMixpanel_(iniISO, fimISO) : nektSql_(sqlFunil_(iniISO, fimISO));
+  var brutos = funilMixpanel_(iniISO, fimISO);
   var novos = brutos.map(function (r) {
     return { data: r.data, cupom: normCupom_(r.cupom), sessoes: +r.sessoes || 0, quest: +r.quest || 0, recs: +r.recs || 0, checkout: +r.checkout || 0 };
   });
@@ -314,32 +275,6 @@ function lerCacheFunil_() {
     .map(function (r) {
       return { data: r[0], cupom: r[1], sessoes: +r[2] || 0, quest: +r[3] || 0, recs: +r[4] || 0, checkout: +r[5] || 0, atualizado: r[6] };
     });
-}
-
-/**
- * Backfill do funil em blocos de BACKFILL_DIAS_POR_QUERY dias, do fim para o início.
- * Para antes do limite de 6 min e agenda a continuação em 1 min. Cursor na propriedade FUNIL_CURSOR.
- */
-function backfillFunil() {
-  var props = PropertiesService.getScriptProperties();
-  var cursor = props.getProperty('FUNIL_CURSOR') || ontemISO_();
-  var t0 = Date.now();
-  apagarGatilhos_('backfillFunil');
-  comLock_(function () {
-    while (cursor >= CFG.DATA_INICIO && Date.now() - t0 < 4 * 60 * 1000) {
-      var ini = maxIso_(somaDias_(cursor, -(CFG.FUNIL.BACKFILL_DIAS_POR_QUERY - 1)), CFG.DATA_INICIO);
-      carregarFunil_(ini, cursor);
-      cursor = somaDias_(ini, -1);
-      props.setProperty('FUNIL_CURSOR', cursor);
-    }
-  });
-  if (cursor >= CFG.DATA_INICIO) {
-    ScriptApp.newTrigger('backfillFunil').timeBased().after(60 * 1000).create();
-    logar_('FUNIL_BACKFILL', 'parcial', 0, 'Continua a partir de ' + cursor);
-  } else {
-    props.deleteProperty('FUNIL_CURSOR');
-    logar_('FUNIL_BACKFILL', 'ok', 0, 'Backfill concluído. Rode atualizarBase().');
-  }
 }
 
 /* =========================================================================

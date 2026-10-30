@@ -2,7 +2,7 @@
  * Medicacao.gs: custo de medicação por creator (cruzamento por CPF)
  *
  * pedidos:     [{data, cpf, gross}] do lake (sqlMedicacaoLake_), um por pedido gratuito
- * cpfParaCupom {cpf: CUPOM} da base de creators (sqlCreatorsCpf_)
+ * cpfParaCupom {cpf: CUPOM} das influenciadoras na Irís (influencer_personal_data)
  * O custo (gross revenue) vai para o cupom do creator dono do CPF, na data de conclusão do
  * pagamento. Sem correspondência, vai para CFG.CUPOM_MEDICACAO_SEM_CREATOR.
  ****************************************************************************************/
@@ -19,14 +19,4 @@ function custoMedicacao_(pedidos, cpfParaCupom, acc, iniISO, fimISO) {
     if (cupom) { resumo.casados++; resumo.valorCasado += v; }
   });
   return resumo;
-}
-
-/** Mapa CPF (11 dígitos) -> cupom, a partir das linhas de sqlCreatorsCpf_. */
-function mapaCpfCreators_(linhas) {
-  var m = {};
-  linhas.forEach(function (r) {
-    var cpf = String(r.cpf || '').replace(/\D/g, '');
-    if (cpf.length === 11 && !/^0+$/.test(cpf)) m[cpf] = normCupom_(r.cupom);
-  });
-  return m;
 }
