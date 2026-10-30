@@ -66,8 +66,18 @@ function carregarIris_() {
     nomePorRef[ref] = i.name;
   });
 
+  // CPF das influenciadoras (influencer_personal_data), só em memória, para o custo de medicação.
+  var cpfParaRef = {};
+  try {
+    sbSelect_('influencer_personal_data', 'influencer_id,cpf').forEach(function (r) {
+      var cpf = String(r.cpf || '').replace(/\D/g, '');
+      if (cpf.length > 0 && cpf.length < 11) cpf = ('00000000000' + cpf).slice(-11);
+      if (cpf.length === 11 && !/^0+$/.test(cpf) && refPorInfluencer[r.influencer_id]) cpfParaRef[cpf] = refPorInfluencer[r.influencer_id];
+    });
+  } catch (e) { logar_('IRIS', 'aviso', 0, 'Sem CPF da Irís (influencer_personal_data): ' + e.message); }
+
   return {
-    categoriaId: catId,
+    categoriaId: catId, cpfParaRef: cpfParaRef,
     refPorInfluencer: refPorInfluencer, influencerPorRef: influencerPorRef, nomePorRef: nomePorRef,
     contratos: contratos, termos: termos, ciclos: ciclos, pecas: pecas,
     campanhas: campanhas, campanhaContratos: campanhaContratos

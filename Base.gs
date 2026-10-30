@@ -90,7 +90,8 @@ function atualizarBase_() {
   comissaoECampanha_(iris, vendas, acc, ini, fim);
 
   var med = CFG.MEDICACAO === false ? { casados: 0, pedidos: 0 }
-    : custoMedicacao_(bqSql_(sqlMedicacaoLake_(ini)), mapaCpfCreators_(nektSql_(sqlCreatorsCpf_())), acc, ini, fim);
+    : custoMedicacao_(bqSql_(sqlMedicacaoLake_(ini)),
+        Object.assign({}, mapaCpfCreators_(nektSql_(sqlCreatorsCpf_())), iris.cpfParaRef || {}), acc, ini, fim);
 
   lerCacheFunil_().forEach(function (r) {
     if (r.data < ini || r.data > fim) return;
