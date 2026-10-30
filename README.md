@@ -123,7 +123,7 @@ Mesma metodologia e mesmas colunas da WL, num segundo perfil (`PERFIS.HL` em `Co
 
 - Irís: categoria `hair_loss`; lake: marca `MANUAL`, `order_taxonomy_business_category = 'hair_loss'`, promo `BR_INFLUENCERS_40_OFF_FIRST_ORDER`;
 - funil: report 93748474 do board de HL no Mixpanel (cache em `_cache_funil_hl`);
-- sem custo de medicação (a regra de medicação por CPF é só da WL) e sem aba de conteúdos.
+- custo de medicação com a mesma regra da WL (desconto >= 90%, cruzamento por CPF com a base de creators), mas com a promo de aquisição `HL_BR_AFFILIATES_100OFF`, e sem aba de conteúdos.
 
 ## PACING V3 (`pace/Pace.gs`)
 

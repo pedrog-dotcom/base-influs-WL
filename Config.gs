@@ -29,7 +29,7 @@ var CFG = {
   // (reactivation, incremental, ...) que são o 1º pedido do cliente na categoria. A comissão usa
   // Acquisitions + Acquisitions Category.
   CONTEXTO_AQUISICAO: 'acquisition',
-  MEDICACAO: true,                  // custo de medicação por CPF (só WL)
+  MEDICACAO: true,                  // custo de medicação por CPF (false desliga no perfil)
 
   // Vendas de influenciador (lake via Nekt), mesma regra do SQL do pace:
   //   Orders       = pedidos com o cupom, todos os status, na data do checkout
@@ -170,7 +170,7 @@ var CFG = {
 /**
  * Perfis (uma aba de base por categoria). Cada perfil sobrescreve chaves do CFG durante a sua
  * execução (ver comPerfil_). WL usa o CFG como está; HL troca marca, categoria, promo, report do
- * Mixpanel e abas. Medicação por CPF é regra só de WL (MEDICACAO: false no HL).
+ * Mixpanel, promo de medicação e abas.
  */
 var PERFIS = {
   WL: {},
@@ -181,7 +181,8 @@ var PERFIS = {
     PROMO_INFLUENCER: ['BR_INFLUENCERS_40_OFF_FIRST_ORDER'],
     CUPONS_HIBRIDOS: [],
     CUPOM_ALIAS: {},
-    MEDICACAO: false,
+    // Medicação da Manual: pedidos com desconto >= 90% de clientes cuja aquisição usou HL_BR_AFFILIATES_100OFF
+    PROMO_MEDICACAO: ['HL_BR_AFFILIATES_100OFF'],
     // https://eu.mixpanel.com/project/2829492/view/3363500/app/boards#id=11478100 (report 93748474)
     MIXPANEL: {
       API_BASE: 'https://eu.mixpanel.com/api/query', PROJECT_ID: '2829492', WORKSPACE_ID: '3363500',
