@@ -93,6 +93,9 @@ var CFG = {
   // Abas
   ABA_BASE: 'BASE_INFLUENCERS_WL',
   ABA_FUNIL: '_cache_funil_wl',     // oculta
+  // Atualização automática: 8h30 e depois a cada 3 horas (o Apps Script varia até 15 min).
+  // Os dados vão sempre até D-1.
+  GATILHO: { HORAS: [8, 11, 14, 17, 20, 23, 2, 5], MINUTO: 30 },
   ABA_LOG: '_log_wl',               // oculta
 
   // Conteúdos (Irís, content_pieces): peças entregues, na data de publicação.

@@ -96,6 +96,9 @@ var CFG = {
   // Abas
   ABA_BASE: 'BASE_INFLUENCERS_WL',
   ABA_FUNIL: '_cache_funil_wl',     // oculta
+  // Atualização automática: 8h30 e depois a cada 3 horas (o Apps Script varia até 15 min).
+  // Os dados vão sempre até D-1.
+  GATILHO: { HORAS: [8, 11, 14, 17, 20, 23, 2, 5], MINUTO: 30 },
   ABA_LOG: '_log_wl',               // oculta
 
   // Conteúdos (Irís, content_pieces): peças entregues, na data de publicação.
@@ -1004,7 +1007,7 @@ function debugMixpanel() {
  *   executarDiario()             funil incremental (D-1..D-3) + reconstrução da base. Gatilho diário.
  *   atualizarBase()              reconstrói a base inteira (custos e vendas são baratos; o funil vem do cache)
  *   atualizarFunilIncremental()  só o funil (dias cobertos pelo report do Mixpanel)
- *   instalarGatilhoDiario()      cria o gatilho diário (≈ 7h40)
+ *   instalarGatilhoDiario()      cria os gatilhos: 8h30 e depois a cada 3 horas (CFG.GATILHO)
  *
  * Granularidade: 1 linha por dia e cupom com qualquer valor diferente de zero.
  * Custos: fixo, comissão e campanha de incentivo (Irís). Vendas e medicação: BigQuery (lake).
@@ -1264,8 +1267,12 @@ function apagarGatilhos_(funcao) {
 
 function instalarGatilhoDiario() {
   apagarGatilhos_('executarDiario');
-  ScriptApp.newTrigger('executarDiario').timeBased().everyDays(1).atHour(7).nearMinute(40).inTimezone(CFG.TZ).create();
-  logar_('GATILHO', 'ok', 0, 'executarDiario diário às ~7h40');
+  var G = CFG.GATILHO;
+  G.HORAS.forEach(function (h) {
+    ScriptApp.newTrigger('executarDiario').timeBased().everyDays(1).atHour(h).nearMinute(G.MINUTO).inTimezone(CFG.TZ).create();
+  });
+  logar_('GATILHO', 'ok', G.HORAS.length, 'executarDiario às ' + G.HORAS.map(function (h) { return h + 'h' + G.MINUTO; }).join(', ') +
+    ' (o Apps Script pode variar até 15 min)');
 }
 
 /* ===== Menu.gs ===== */
@@ -1279,7 +1286,7 @@ function onOpen() {
     .addItem('Reconstruir só a base', 'atualizarBase')
     .addItem('Atualizar só o funil', 'atualizarFunilIncremental')
     .addSeparator()
-    .addItem('Instalar gatilho diário', 'instalarGatilhoDiario')
+    .addItem('Instalar gatilhos (8h30 e a cada 3h)', 'instalarGatilhoDiario')
     .addSeparator()
     .addItem('Testar conexões', 'debugConexoes')
     .addItem('Diagnóstico da Irís (comissão/campanha)', 'debugIris')

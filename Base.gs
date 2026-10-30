@@ -5,7 +5,7 @@
  *   executarDiario()             funil incremental (D-1..D-3) + reconstrução da base. Gatilho diário.
  *   atualizarBase()              reconstrói a base inteira (custos e vendas são baratos; o funil vem do cache)
  *   atualizarFunilIncremental()  só o funil (dias cobertos pelo report do Mixpanel)
- *   instalarGatilhoDiario()      cria o gatilho diário (≈ 7h40)
+ *   instalarGatilhoDiario()      cria os gatilhos: 8h30 e depois a cada 3 horas (CFG.GATILHO)
  *
  * Granularidade: 1 linha por dia e cupom com qualquer valor diferente de zero.
  * Custos: fixo, comissão e campanha de incentivo (Irís). Vendas e medicação: BigQuery (lake).
@@ -265,6 +265,10 @@ function apagarGatilhos_(funcao) {
 
 function instalarGatilhoDiario() {
   apagarGatilhos_('executarDiario');
-  ScriptApp.newTrigger('executarDiario').timeBased().everyDays(1).atHour(7).nearMinute(40).inTimezone(CFG.TZ).create();
-  logar_('GATILHO', 'ok', 0, 'executarDiario diário às ~7h40');
+  var G = CFG.GATILHO;
+  G.HORAS.forEach(function (h) {
+    ScriptApp.newTrigger('executarDiario').timeBased().everyDays(1).atHour(h).nearMinute(G.MINUTO).inTimezone(CFG.TZ).create();
+  });
+  logar_('GATILHO', 'ok', G.HORAS.length, 'executarDiario às ' + G.HORAS.map(function (h) { return h + 'h' + G.MINUTO; }).join(', ') +
+    ' (o Apps Script pode variar até 15 min)');
 }

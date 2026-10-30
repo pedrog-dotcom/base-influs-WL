@@ -76,7 +76,7 @@ Mapeamento formato da Irís → plataforma/formato em `CFG.FORMATOS`.
 3. Menu **Base Influencers > Testar conexões** e **Diagnóstico da medicação (CPF)**.
 4. **Reconstruir só a base** (`atualizarBase`).
 5. `configurarPace` uma vez, para ligar a aba `Acquisition: Paid Creators` à `BASE_INFLUENCERS_WL`.
-6. **Instalar gatilho diário**. (≈ 7h40: funil dos dias cobertos pelo report do Mixpanel + base inteira). Se o report não tiver sessões de ontem, o `_log_wl` avisa.
+6. **Instalar gatilhos**: 8h30 e depois a cada 3 horas, sempre com dados até D-1 (funil dos dias cobertos pelo report do Mixpanel + base inteira). Se o report não tiver sessões de ontem, o `_log_wl` avisa.
 
 ## Plug-and-play da comissão
 

@@ -8,7 +8,7 @@ function onOpen() {
     .addItem('Reconstruir só a base', 'atualizarBase')
     .addItem('Atualizar só o funil', 'atualizarFunilIncremental')
     .addSeparator()
-    .addItem('Instalar gatilho diário', 'instalarGatilhoDiario')
+    .addItem('Instalar gatilhos (8h30 e a cada 3h)', 'instalarGatilhoDiario')
     .addSeparator()
     .addItem('Testar conexões', 'debugConexoes')
     .addItem('Diagnóstico da Irís (comissão/campanha)', 'debugIris')
