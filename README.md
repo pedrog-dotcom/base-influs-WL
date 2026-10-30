@@ -1,6 +1,8 @@
 # Base Influencers WL (Voy BR)
 
-> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado a uma planilha Google que monta a base diária de influenciadores da WL: custos e conteúdos da Irís (Supabase), vendas e custo de medicação do lake (BigQuery) e funil do Mixpanel (Query API, report do board), em duas abas: a base geral em formato longo (uma linha por **Data x Cupom x Métrica**, a partir de 21/10/2026) e a base de conteúdos.
+> Repositório **base-influs-WL** (pedrog-dotcom). Apps Script vinculado à planilha **"WL BR | Influencers - PACING V3"** que monta a base diária de influenciadores da WL: custos e conteúdos da Irís (Supabase), vendas e custo de medicação do lake (BigQuery) e funil do Mixpanel (Query API, report do board), em duas abas: a base geral em formato longo (uma linha por **Data x Cupom x Métrica**, a partir de 21/10/2026) e a base de conteúdos.
+>
+> O código vive aqui no GitHub. No projeto de Apps Script da planilha de pacing ficam só dois arquivos: `BASE_INFLUENCERS_WL.gs` (o motor, gerado por `build.sh` a partir dos `.gs` deste repositório) e `Pace.gs` (`pace/Pace.gs`). HL tem repositório próprio (base-influs-HL) com o mesmo motor.
 
 ## Saída 1: aba `BASE_INFLUENCERS_WL` (base geral, formato longo)
 
@@ -28,7 +30,7 @@ Regras de cada componente:
 | Custo de comissão | Irís: `sale_bands` dos termos vigentes, por ordinal de venda no mês (`tier_counter_scope`), aplicado às vendas comissionáveis: Acquisitions + Acquisitions Category (pedido confirmado e pago, de contexto acquisition ou 1º pedido do cliente na categoria), na data do checkout. Mesma lógica do `calcular_pagamento` |
 | Custo de campanha de incentivo | Irís: `commission_campaigns` ativas ou encerradas (`bonus_por_venda`, `bonus_meta`, `troca_faixa`: a diferença sobre a faixa padrão) |
 | Custo de medicação | Lake no BigQuery (`manual-data-team.prod`): gross revenue dos pedidos Voy/Brazil com desconto >= 90% (vendas gratuitas) de clientes cuja order de aquisição usou `voy_br_influvoy_4_99off` ou `voy_br_influvoy_99`, na data de conclusão do pagamento. O CPF do cliente (`dim_customer.cpf_number`) é cruzado com o CPF da influenciadora no `influencer_personal_data` da Irís (única fonte) e o custo vai para o `referral_code` do creator. Sem creator correspondente: linha `(MEDICACAO SEM CREATOR)`. Nenhum CPF é gravado na planilha |
-| Sessões / Quest started / Recommendations / Checkout started | Mixpanel direto pela Query API (Insights) com service account: report 93726547 do board "Voy Saude BR Full funnel" (projeto 2829492, EU), breakdown por "Last touch UTM campaign name". Uma chamada traz o período salvo no report (recomendado: últimos 30 dias); a cada execução só os dias dentro desse período são regravados no `_cache_funil`, e os dias mais antigos ficam guardados. Dias no fuso do projeto do Mixpanel. Cupons além do limite de 200 segmentos do report caem em `(OUTROS NO MIXPANEL)`. |
+| Sessões / Quest started / Recommendations / Checkout started | Mixpanel direto pela Query API (Insights) com service account: report 93726547 do board "Voy Saude BR Full funnel" (projeto 2829492, EU), breakdown por "Last touch UTM campaign name". Uma chamada traz o período salvo no report (recomendado: últimos 30 dias); a cada execução só os dias dentro desse período são regravados no `_cache_funil_wl`, e os dias mais antigos ficam guardados. Dias no fuso do projeto do Mixpanel. Cupons além do limite de 200 segmentos do report caem em `(OUTROS NO MIXPANEL)`. |
 | Orders | BigQuery (`prod.fct_orders` + `prod.dim_order_item_discounts`), regra do SQL do pace: pedidos Voy/Brazil com `promotion_code = voy_br_coupon_15_influencer`, todos os contextos e status, na data do checkout. Creators híbridas (`CUPONS_HIBRIDOS`: ISAVOY, CARINAVOY/CARINA40) entram com qualquer promotion code |
 | Acquisitions | Mesmos pedidos, só os confirmados (`is_confirmed`, qualquer `order_context`), na data de conclusão do pagamento |
 
@@ -57,12 +59,14 @@ Mapeamento formato da Irís → plataforma/formato em `CFG.FORMATOS`.
 - **Conteudos.gs**: base de conteúdos (Data, Cupom, Plataforma, Formato, Quantidade)
 - **Util.gs**: datas ISO e acumulador
 - **Mixpanel.gs**: cliente da Query API do Mixpanel (service account em `MIXPANEL_SA_USER`, `MIXPANEL_SA_SECRET`, `MIXPANEL_PROJECT_ID`) e leitura do report do funil
+- **Planilha.gs**: leitura e escrita das abas pela API do Sheets (serviço avançado), sem esperar o recálculo da planilha
 - **Base.gs**: orquestração, cache do funil, log, alerta e gatilho
 - **Menu.gs**: menu "Base Influencers" e diagnósticos
+- **build.sh**: junta tudo em `dist/BASE_INFLUENCERS_WL.gs`, o arquivo colado no editor da planilha de pacing
 
 ## Instalação
 
-1. Crie uma planilha, abra Extensões > Apps Script e copie os arquivos (ou use `clasp push`). Deixe a planilha em pt-BR para a vírgula decimal.
+1. `./build.sh` e cole `dist/BASE_INFLUENCERS_WL.gs` e `pace/Pace.gs` em Extensões > Apps Script da planilha de pacing, com o `appsscript.json` deste repositório (BigQuery e Sheets como serviços avançados).
 2. Propriedades do script:
    - `SUPABASE_URL` = `https://eupkvybriepteduevrpr.supabase.co`
    - `SUPABASE_SERVICE_KEY` = service_role key do projeto IRIS
@@ -70,8 +74,9 @@ Mapeamento formato da Irís → plataforma/formato em `CFG.FORMATOS`.
    - `ALERT_EMAIL` (opcional)
    - Serviço avançado **BigQuery API** ativado (já declarado no `appsscript.json`). A conta que executa precisa ler `manual-data-team.prod` e rodar jobs no projeto `manual-data-team`, como no Base-Final-HL.
 3. Menu **Base Influencers > Testar conexões** e **Diagnóstico da medicação (CPF)**.
-5. **Reconstruir só a base**.
-6. **Instalar gatilho diário**. (≈ 7h40: funil dos dias cobertos pelo report do Mixpanel + base inteira). Se o report não tiver sessões de ontem, o `_log` avisa.
+4. **Reconstruir só a base** (`atualizarBase`).
+5. `configurarPace` uma vez, para ligar a aba `Acquisition: Paid Creators` à `BASE_INFLUENCERS_WL`.
+6. **Instalar gatilho diário**. (≈ 7h40: funil dos dias cobertos pelo report do Mixpanel + base inteira). Se o report não tiver sessões de ontem, o `_log_wl` avisa.
 
 ## Plug-and-play da comissão
 
@@ -115,23 +120,17 @@ Mixpanel (Query API, report do board) -----+                         +--> aba BA
 
 > Manter esta documentação: ao ligar a base a outro repositório, atualizar este README e o mapa (README/RepoMap.gs) dos repositórios envolvidos.
 
-## Hair Loss (aba `BASE_INFLUENCERS_HL`)
+## Hair Loss
 
-Mesma metodologia e mesmas colunas da WL, num segundo perfil (`PERFIS.HL` em `Config.gs`), rodado pelo mesmo `executarDiario`:
-
-- Irís: categoria `hair_loss`; lake: marca `MANUAL`, `order_taxonomy_business_category = 'hair_loss'`, promo `BR_INFLUENCERS_40_OFF_FIRST_ORDER`;
-- funil: report 93748474 do board de HL no Mixpanel (cache em `_cache_funil_hl`);
-- custo de medicação com a mesma regra da WL (desconto >= 90%, cruzamento por CPF com a Irís), mas com a promo de aquisição `HL_BR_AFFILIATES_100OFF`, e sem aba de conteúdos.
-
-Na planilha "Influencers PACING V3 - HL", a aba `BASE_INFLUENCERS_HL` traz essa base a partir de 01/11/2026 por fórmula (sem script): `=IFNA(FILTER(IMPORTRANGE(<base>, "BASE_INFLUENCERS_HL!A2:F"), INDEX(IMPORTRANGE(<base>, "BASE_INFLUENCERS_HL!A2:A"))>=DATE(2026,11,1)), "")`. Como o motor recalcula tudo todo dia, a aba cresce um dia por execução.
+HL tem repositório próprio, **base-influs-HL**, com o mesmo motor rodando na planilha "Influencers PACING V3 - HL".
 
 ## PACING V3 (`pace/Pace.gs`)
 
-Planilha "WL BR | Influencers - PACING V3". Ela é pesada demais para o motor rodar dentro dela (o Apps Script dá timeout ao acessar o documento), então **o motor continua nesta planilha da base** e o pacing só lê a aba `BASE_INFLUENCERS_WL` por IMPORTRANGE.
+Planilha "WL BR | Influencers - PACING V3". O motor roda dentro dela e grava as abas pela API do Sheets (`Planilha.gs`): pelo SpreadsheetApp cada escrita esperava o recálculo da planilha e a execução estourava o tempo. Abas que o motor cria: `BASE_INFLUENCERS_WL`, `BASE_CONTEUDOS_WL` e as ocultas `_cache_funil_wl` e `_log_wl`.
 
 A aba `Acquisition: Paid Creators` continua sendo uma fórmula:
 
 - **até a véspera do corte** (`Config!B14`, 01/11/2026): igual a antes (H_Spend, H_Mixpanel, H_Checkouts);
-- **a partir do corte**: `IMPORTRANGE(Config!B15, "BASE_INFLUENCERS_WL!A2:F")`, com o cupom passando pelo de-para da aba `Mapeamento` (Cupom D→E e UTM J→K) e reagrupado por Data x Cupom principal x Métrica.
+- **a partir do corte**: a aba `BASE_INFLUENCERS_WL` da própria planilha, com o cupom passando pelo de-para da aba `Mapeamento` (Cupom D→E e UTM J→K) e reagrupado por Data x Cupom principal x Métrica.
 
-`pace/Pace.gs` é o único arquivo do projeto Apps Script do pacing: `configurarPace` grava `Config!A14:C15` (corte, URL da base e um IMPORTRANGE simples em C15 para liberar o acesso), guarda a fórmula anterior em `Config!B16` e troca a fórmula de A2. `desfazerPace` volta a anterior. A atualização diária é o gatilho `executarDiario` desta planilha da base.
+`configurarPace` grava `Config!A14:B14` (corte), guarda a fórmula anterior em `Config!B16` e troca a fórmula de A2. `desfazerPace` volta a anterior. A atualização diária é o gatilho `executarDiario` desta planilha.

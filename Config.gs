@@ -92,8 +92,8 @@ var CFG = {
 
   // Abas
   ABA_BASE: 'BASE_INFLUENCERS_WL',
-  ABA_FUNIL: '_cache_funil',
-  ABA_LOG: '_log',
+  ABA_FUNIL: '_cache_funil_wl',     // oculta
+  ABA_LOG: '_log_wl',               // oculta
 
   // Conteúdos (Irís, content_pieces): peças entregues, na data de publicação.
   // Vão para a aba própria ABA_CONTEUDOS (Data | Cupom | Plataforma | Formato | Quantidade).
@@ -141,32 +141,8 @@ var CFG = {
   COLUNAS_CONTEUDOS: ['Data', 'Cupom', 'Plataforma', 'Formato', 'Quantidade']
 };
 
-/**
- * Perfis (uma aba de base por categoria). Cada perfil sobrescreve chaves do CFG durante a sua
- * execução (ver comPerfil_). WL usa o CFG como está; HL troca marca, categoria, promo, report do
- * Mixpanel, promo de medicação e abas.
- */
-var PERFIS = {
-  WL: {},
-  HL: {
-    BRAND: 'MANUAL',
-    CATEGORIA_IRIS: 'hair_loss',
-    CATEGORIA_LAKE: 'hair_loss',
-    PROMO_INFLUENCER: ['BR_INFLUENCERS_40_OFF_FIRST_ORDER'],
-    CUPONS_HIBRIDOS: [],
-    CUPOM_ALIAS: {},
-    // Medicação da Manual: pedidos com desconto >= 90% de clientes cuja aquisição usou HL_BR_AFFILIATES_100OFF
-    PROMO_MEDICACAO: ['HL_BR_AFFILIATES_100OFF'],
-    // https://eu.mixpanel.com/project/2829492/view/3363500/app/boards#id=11478100 (report 93748474)
-    MIXPANEL: {
-      API_BASE: 'https://eu.mixpanel.com/api/query', PROJECT_ID: '2829492', WORKSPACE_ID: '3363500',
-      FUNIL_REPORT_ID: '93748474', CUPOM_OUTROS: '(OUTROS NO MIXPANEL)'
-    },
-    ABA_BASE: 'BASE_INFLUENCERS_HL',
-    ABA_FUNIL: '_cache_funil_hl',
-    ABA_CONTEUDOS: null
-  }
-};
+/** Um só perfil: WL usa o CFG como está. HL tem repositório próprio (base-influs-HL), com o mesmo motor. */
+var PERFIS = { WL: {} };
 
 function prop_(nome, obrigatoria) {
   var v = PropertiesService.getScriptProperties().getProperty(nome);

@@ -150,9 +150,8 @@ function linhasDaBase_(acc) {
 function mapeadorCupom_() {
   var M = CFG.MAPEAMENTO;
   if (!M) return function (c) { return c; };
-  var sh = SpreadsheetApp.getActive().getSheetByName(M.aba);
-  if (!sh || sh.getLastRow() < 2) return function (c) { return c; };
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getDisplayValues();
+  var vals = lerAba_(M.aba, 'A2:Z');
+  if (!vals.length) return function (c) { return c; };
   var tabelas = M.pares.map(function (p) {
     var t = {};
     vals.forEach(function (r) {
@@ -169,16 +168,15 @@ function mapeadorCupom_() {
 }
 
 function escreverBase_(linhas) {
-  escreverAba_(CFG.ABA_BASE, CFG.COLUNAS, linhas, null, CFG.FORMATO_DATA_BASE);
+  gravarAba_(CFG.ABA_BASE, CFG.COLUNAS, linhas, { datasIso: true, formatos: [{ col: 1, tipo: 'DATE', padrao: CFG.FORMATO_DATA_BASE }] });
 }
 
 function escreverConteudos_(linhas) {
-  escreverAba_(CFG.ABA_CONTEUDOS, CFG.COLUNAS_CONTEUDOS, linhas, function (sh, n) {
-    sh.getRange(2, 5, n, 1).setNumberFormat('#,##0');
-  });
+  gravarAba_(CFG.ABA_CONTEUDOS, CFG.COLUNAS_CONTEUDOS, linhas, { datasIso: true, formatos: [
+    { col: 1, tipo: 'DATE', padrao: 'dd/MM/yyyy' }, { col: 5, tipo: 'NUMBER', padrao: '#,##0' }] });
 }
 
-var ESCRITA_LOTE = 2000;   // linhas por setValues
+var ESCRITA_LOTE = 5000;   // linhas por intervalo enviado à API
 
 /** Data ISO (yyyy-mm-dd) -> número de série do Sheets (dias desde 30/12/1899), sem objeto Date. */
 function serialSheets_(iso) {
@@ -186,42 +184,6 @@ function serialSheets_(iso) {
   var ms = Date.UTC(+p[0], +p[1] - 1, +p[2]);
   if (isNaN(ms)) throw new Error('Data inválida na base: "' + iso + '"');
   return (ms - Date.UTC(1899, 11, 30)) / 86400000;
-}
-
-/**
- * Substitui o conteúdo de uma aba (cabeçalho fixo + linhas com data ISO na 1ª coluna).
- * A data vai como número de série com formato dd/MM/yyyy (não como objeto Date), a área de
- * dados é limpa com valores e formatos, a escrita é em lotes e, no fim, confere se nenhuma
- * linha ficou sem data.
- */
-function escreverAba_(nome, cols, linhas, formatar, formatoData) {
-  var sh = aba_(nome, cols);
-  var n = cols.length;
-  if (sh.getMaxColumns() < n) sh.insertColumnsAfter(sh.getMaxColumns(), n - sh.getMaxColumns());
-  var largura = Math.max(n, sh.getLastColumn());
-  if (sh.getMaxRows() > 1) sh.getRange(2, 1, sh.getMaxRows() - 1, largura).clear();   // valores e formatos
-  if (sh.getLastColumn() > n) sh.getRange(1, n + 1, 1, sh.getLastColumn() - n).clearContent();
-  if (linhas.length) {
-    var valores = linhas.map(function (l) {
-      var out = l.slice();
-      out[0] = serialSheets_(l[0]);
-      return out;
-    });
-    if (sh.getMaxRows() < valores.length + 1) sh.insertRowsAfter(sh.getMaxRows(), valores.length + 1 - sh.getMaxRows());
-    for (var i = 0; i < valores.length; i += ESCRITA_LOTE) {
-      var lote = valores.slice(i, i + ESCRITA_LOTE);
-      sh.getRange(2 + i, 1, lote.length, n).setValues(lote);
-      SpreadsheetApp.flush();
-    }
-    sh.getRange(2, 1, valores.length, 1).setNumberFormat(formatoData || 'dd/MM/yyyy');
-    if (formatar) formatar(sh, valores.length);
-    SpreadsheetApp.flush();
-
-    var semData = sh.getRange(2, 1, valores.length, 1).getValues()
-      .filter(function (r) { return r[0] === '' || r[0] === null; }).length;
-    if (semData) throw new Error(nome + ': ' + semData + ' de ' + valores.length + ' linhas ficaram sem data após a escrita.');
-  }
-  sh.setFrozenRows(1);
 }
 
 /* =========================================================================
@@ -252,25 +214,16 @@ function carregarFunil_(iniISO, fimISO) {
   var todos = mantidos.concat(novos).sort(function (a, b) {
     return a.data === b.data ? (a.cupom < b.cupom ? -1 : 1) : (a.data < b.data ? -1 : 1);
   });
-  var sh = aba_(CFG.ABA_FUNIL, ['Data', 'Cupom', 'Sessões', 'Quest started', 'Recommendations', 'Checkout started', 'Atualizado em']);
-  if (sh.getMaxRows() > 1) sh.getRange(2, 1, sh.getMaxRows() - 1, 7).clearContent();
-  var agora = new Date();
-  if (todos.length) {
-    sh.getRange(2, 1, todos.length, 2).setNumberFormat('@');   // data ISO e cupom como texto
-    sh.getRange(2, 7, todos.length, 1).setNumberFormat('@');
-    sh.getRange(2, 3, todos.length, 4).setNumberFormat('0');
-    sh.getRange(2, 1, todos.length, 7).setValues(todos.map(function (r) {
-      return [r.data, r.cupom, r.sessoes, r.quest, r.recs, r.checkout, r.atualizado || Utilities.formatDate(agora, CFG.TZ, 'dd/MM/yyyy HH:mm')];
-    }));
-  }
+  var agora = Utilities.formatDate(new Date(), CFG.TZ, 'dd/MM/yyyy HH:mm');
+  // RAW: data ISO e cupom ficam como texto, contagens como número.
+  gravarAba_(CFG.ABA_FUNIL, ['Data', 'Cupom', 'Sessões', 'Quest started', 'Recommendations', 'Checkout started', 'Atualizado em'],
+    todos.map(function (r) { return [r.data, r.cupom, r.sessoes, r.quest, r.recs, r.checkout, r.atualizado || agora]; }));
   logar_('FUNIL', 'ok', novos.length, 'Funil ' + iniISO + ' a ' + fimISO + ' em ' + Math.round((Date.now() - t0) / 1000) + 's');
   return novos.length;
 }
 
 function lerCacheFunil_() {
-  var sh = SpreadsheetApp.getActive().getSheetByName(CFG.ABA_FUNIL);
-  if (!sh || sh.getLastRow() < 2) return [];
-  return sh.getRange(2, 1, sh.getLastRow() - 1, 7).getDisplayValues()
+  return lerAba_(CFG.ABA_FUNIL, 'A2:G')
     .filter(function (r) { return r[0]; })
     .map(function (r) {
       return { data: r[0], cupom: r[1], sessoes: +r[2] || 0, quest: +r[3] || 0, recs: +r[4] || 0, checkout: +r[5] || 0, atualizado: r[6] };
@@ -281,18 +234,6 @@ function lerCacheFunil_() {
  * Infra
  * ========================================================================= */
 
-function aba_(nome, cabecalho) {
-  var ss = SpreadsheetApp.getActive();
-  var sh = ss.getSheetByName(nome) || ss.insertSheet(nome);
-  if (cabecalho) {
-    var atual = sh.getRange(1, 1, 1, cabecalho.length).getDisplayValues()[0];
-    if (atual.join('|') !== cabecalho.join('|')) {
-      sh.getRange(1, 1, 1, cabecalho.length).setValues([cabecalho]).setFontWeight('bold');
-    }
-  }
-  return sh;
-}
-
 function comLock_(fn) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) throw new Error('Outra execução em andamento.');
@@ -301,10 +242,9 @@ function comLock_(fn) {
 
 function logar_(etapa, status, linhas, msg) {
   try {
-    var sh = aba_(CFG.ABA_LOG, ['Quando', 'Etapa', 'Status', 'Linhas', 'Mensagem']);
-    sh.insertRowAfter(1);
-    sh.getRange(2, 1, 1, 5).setValues([[new Date(), (CFG.PERFIL ? CFG.PERFIL + ' ' : '') + etapa, status, linhas, String(msg && msg.message ? msg.message : msg).slice(0, 500)]]);
-    if (sh.getLastRow() > 501) sh.deleteRows(502, sh.getLastRow() - 501);
+    var quando = Utilities.formatDate(new Date(), CFG.TZ, 'dd/MM/yyyy HH:mm:ss');
+    anexarAba_(CFG.ABA_LOG, ['Quando', 'Etapa', 'Status', 'Linhas', 'Mensagem'],
+      [[quando, (CFG.PERFIL ? CFG.PERFIL + ' ' : '') + etapa, status, linhas, String(msg && msg.message ? msg.message : msg).slice(0, 500)]]);
   } catch (e) { console.error(e); }
 }
 
@@ -312,7 +252,7 @@ function avisar_(etapa, e) {
   var para = prop_('ALERT_EMAIL', false) || Session.getEffectiveUser().getEmail();
   if (!para) return;
   MailApp.sendEmail(para, '[Base Influencers WL] erro em ' + etapa,
-    String(e && e.stack ? e.stack : e) + '\n\nPlanilha: ' + SpreadsheetApp.getActive().getUrl());
+    String(e && e.stack ? e.stack : e) + '\n\nPlanilha: ' + urlPlanilha_());
 }
 
 function apagarGatilhos_(funcao) {

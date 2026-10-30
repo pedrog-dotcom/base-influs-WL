@@ -1,17 +1,15 @@
 /****************************************************************************************
- * Pace.gs: único script do projeto da planilha "WL BR | Influencers - PACING V3".
+ * Pace.gs: liga a aba 'Acquisition: Paid Creators' à aba BASE_INFLUENCERS_WL desta mesma planilha.
  *
- * A planilha do pacing é pesada demais para o motor da base rodar dentro dela (o Apps Script
- * dá timeout ao acessar o documento). Por isso o motor roda na planilha da base
- * (BASE_INFLUENCERS_WL, formato longo) e o pacing só LÊ essa aba por IMPORTRANGE.
+ * O motor (BASE_INFLUENCERS_WL.gs, gerado por build.sh) roda aqui mesmo, no projeto da planilha
+ * "WL BR | Influencers - PACING V3", e grava a aba BASE_INFLUENCERS_WL pela API do Sheets.
  *
  * A aba 'Acquisition: Paid Creators' continua sendo uma fórmula:
  *   - até a véspera de Config!B14 (01/11/2026): igual a antes (H_Spend, H_Mixpanel, H_Checkouts)
- *   - a partir de Config!B14: BASE_INFLUENCERS_WL da planilha em Config!B15, com o cupom
- *     passando pelo de-para da aba Mapeamento (Cupom D->E e UTM J->K) e reagrupado.
- * Config!C15 tem um IMPORTRANGE simples só para liberar o acesso entre as planilhas.
+ *   - a partir de Config!B14: BASE_INFLUENCERS_WL, com o cupom passando pelo de-para da aba
+ *     Mapeamento (Cupom D->E e UTM J->K) e reagrupado.
  *
- * configurarPace(): grava Config!A14:C15 (se vazios), guarda a fórmula anterior em Config!B16 e
+ * configurarPace(): grava Config!A14:B14 (se vazio), guarda a fórmula anterior em Config!B16 e
  * troca a fórmula de A2. desfazerPace() volta a fórmula anterior. Rodar pelo editor.
  * Nomes do LET não podem parecer referência de célula (ex.: m1, d2): dá #NAME?.
  ****************************************************************************************/
@@ -19,7 +17,6 @@
 var PACE = {
   ABA_SAIDA: 'Acquisition: Paid Creators',
   CORTE_PADRAO: [2026, 11, 1],
-  URL_BASE: 'https://docs.google.com/spreadsheets/d/1NCrckOSsHT60gmXKnJLZnRQnHuFh2FaPnEUkQJ8cROg',
   ABA_BASE: 'BASE_INFLUENCERS_WL'
 };
 
@@ -37,7 +34,7 @@ function formulaPace_() {
     '  ord, QUERY(FILTER(H_Checkouts!A2:E, H_Checkouts!D2:D<>"", H_Checkouts!A2:A>=ini, H_Checkouts!A2:A<=fimV), "select Col1, Col4, sum(Col5) group by Col1, Col4 label sum(Col5) \'\'", 0),',
     '  pay, QUERY(FILTER(H_Checkouts!A2:E, H_Checkouts!D2:D<>"", H_Checkouts!C2:C="Yes", H_Checkouts!A2:A>=ini, H_Checkouts!A2:A<=fimV), "select Col1, Col4, sum(Col5) group by Col1, Col4 label sum(Col5) \'\'", 0),',
     '  acq, QUERY(FILTER(H_Checkouts!A2:E, H_Checkouts!D2:D<>"", H_Checkouts!C2:C="Yes", ISNUMBER(H_Checkouts!B2:B), H_Checkouts!B2:B>=ini, H_Checkouts!B2:B<=fimV), "select Col2, Col4, sum(Col5) group by Col2, Col4 label sum(Col5) \'\'", 0),',
-    '  imp, IFERROR(IMPORTRANGE(Config!$B$15, "' + PACE.ABA_BASE + '!A2:F"), HSTACK(ini, "", "", "", "", 0)),',
+    '  imp, IFERROR(FILTER(' + PACE.ABA_BASE + '!A2:F, ' + PACE.ABA_BASE + '!A2:A<>""), HSTACK(ini, "", "", "", "", 0)),',
     '  dts, CHOOSECOLS(imp, 1),',
     '  irs, IFERROR(FILTER(imp, ISNUMBER(dts), dts>=corte, dts>=ini, dts<=fim), HSTACK(ini, "", "", "", "", 0)),',
     '  cupR, UPPER(TRIM(CHOOSECOLS(irs, 4))),',
@@ -70,12 +67,6 @@ function configurarPace() {
     cfg.getRange('A14:B14').setValues([['Base Irís a partir de', new Date(c[0], c[1] - 1, c[2])]]);
     cfg.getRange('B14').setNumberFormat('dd/MM/yyyy');
   }
-  if (!cfg.getRange('B15').getValue()) {
-    cfg.getRange('A15:B15').setValues([['Planilha da base Irís (URL)', PACE.URL_BASE]]);
-    // Sem IFERROR: o botão "Permitir acesso" só aparece com o erro do IMPORTRANGE à mostra.
-    cfg.getRange('C15').setFormula('=IMPORTRANGE(B15, "' + PACE.ABA_BASE + '!A1")');
-  }
-
   var atual = saida.getRange('A2').getFormula();
   if (atual && atual.indexOf('IMPORTRANGE') < 0 && atual.indexOf('H_Iris') < 0) {
     cfg.getRange('A16:B16').setValues([['Fórmula anterior de ' + PACE.ABA_SAIDA + '!A2 (backup)', "'" + atual]]);
