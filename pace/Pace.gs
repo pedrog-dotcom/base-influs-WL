@@ -1,21 +1,25 @@
 /****************************************************************************************
- * Pace.gs: integração com a planilha "WL BR | Influencers - PACING V3".
+ * Pace.gs: único script do projeto da planilha "WL BR | Influencers - PACING V3".
  *
- * A aba 'Acquisition: Paid Creators' é uma fórmula. Até a véspera da data de corte
- * (Config!B14, 01/11/2026) ela segue exatamente como antes (H_Spend, H_Mixpanel, H_Checkouts).
- * A partir do corte, lê a aba auxiliar H_Iris, gerada por este script com a mesma lógica da
- * base de teste (Irís + lake + Mixpanel direto + medicação por CPF).
+ * A planilha do pacing é pesada demais para o motor da base rodar dentro dela (o Apps Script
+ * dá timeout ao acessar o documento). Por isso o motor roda na planilha da base
+ * (BASE_INFLUENCERS_WL, formato longo) e o pacing só LÊ essa aba por IMPORTRANGE.
  *
- * configurarPace(): grava o corte em Config!A14:B14 (se vazio), troca a fórmula de
- * 'Acquisition: Paid Creators'!A2, guarda a fórmula anterior em Config!A16:B16 e esconde as
- * abas auxiliares. Rodar uma vez. desfazerPace() volta a fórmula anterior.
+ * A aba 'Acquisition: Paid Creators' continua sendo uma fórmula:
+ *   - até a véspera de Config!B14 (01/11/2026): igual a antes (H_Spend, H_Mixpanel, H_Checkouts)
+ *   - a partir de Config!B14: BASE_INFLUENCERS_WL da planilha em Config!B15, com o cupom
+ *     passando pelo de-para da aba Mapeamento (Cupom D->E e UTM J->K) e reagrupado.
+ * Config!C15 tem um IMPORTRANGE simples só para liberar o acesso entre as planilhas.
+ *
+ * configurarPace(): grava Config!A14:C15 (se vazios), guarda a fórmula anterior em Config!B16 e
+ * troca a fórmula de A2. desfazerPace() volta a fórmula anterior. Rodar pelo editor.
  ****************************************************************************************/
 
 var PACE = {
   ABA_SAIDA: 'Acquisition: Paid Creators',
-  CELULA_CORTE: 'B14',
-  CORTE_PADRAO: '2026-11-01',
-  CELULA_BACKUP: 'B16'
+  CORTE_PADRAO: [2026, 11, 1],
+  URL_BASE: 'https://docs.google.com/spreadsheets/d/1NCrckOSsHT60gmXKnJLZnRQnHuFh2FaPnEUkQJ8cROg',
+  ABA_BASE: 'BASE_INFLUENCERS_WL'
 };
 
 function formulaPace_() {
@@ -32,7 +36,14 @@ function formulaPace_() {
     '  ord, QUERY(FILTER(H_Checkouts!A2:E, H_Checkouts!D2:D<>"", H_Checkouts!A2:A>=ini, H_Checkouts!A2:A<=fimV), "select Col1, Col4, sum(Col5) group by Col1, Col4 label sum(Col5) \'\'", 0),',
     '  pay, QUERY(FILTER(H_Checkouts!A2:E, H_Checkouts!D2:D<>"", H_Checkouts!C2:C="Yes", H_Checkouts!A2:A>=ini, H_Checkouts!A2:A<=fimV), "select Col1, Col4, sum(Col5) group by Col1, Col4 label sum(Col5) \'\'", 0),',
     '  acq, QUERY(FILTER(H_Checkouts!A2:E, H_Checkouts!D2:D<>"", H_Checkouts!C2:C="Yes", ISNUMBER(H_Checkouts!B2:B), H_Checkouts!B2:B>=ini, H_Checkouts!B2:B<=fimV), "select Col2, Col4, sum(Col5) group by Col2, Col4 label sum(Col5) \'\'", 0),',
-    '  iris, IFERROR(FILTER(H_Iris!A2:D, ISNUMBER(H_Iris!A2:A), H_Iris!A2:A>=corte, H_Iris!A2:A>=ini, H_Iris!A2:A<=fim), HSTACK(ini, "", "", 0)),',
+    '  imp, IFERROR(IMPORTRANGE(Config!$B$15, "' + PACE.ABA_BASE + '!A2:F"), HSTACK(ini, "", "", "", "", 0)),',
+    '  d, CHOOSECOLS(imp, 1),',
+    '  irs, IFERROR(FILTER(imp, ISNUMBER(d), d>=corte, d>=ini, d<=fim), HSTACK(ini, "", "", "", "", 0)),',
+    '  cupR, UPPER(TRIM(CHOOSECOLS(irs, 4))),',
+    '  m1, IFERROR(VLOOKUP(cupR, HSTACK(UPPER(TRIM(Mapeamento!$D$2:$D)), Mapeamento!$E$2:$E), 2, FALSE), ""),',
+    '  m2, IFERROR(VLOOKUP(cupR, HSTACK(UPPER(TRIM(Mapeamento!$J$2:$J)), Mapeamento!$K$2:$K), 2, FALSE), ""),',
+    '  cupF, IF(m1<>"", m1, IF(m2<>"", m2, CHOOSECOLS(irs, 4))),',
+    '  iris, QUERY(HSTACK(CHOOSECOLS(irs, 1), cupF, CHOOSECOLS(irs, 5), CHOOSECOLS(irs, 6)), "select Col1, Col2, Col3, sum(Col4) group by Col1, Col2, Col3 label sum(Col4) \'\'", 0),',
     '  todos, VSTACK(',
     '    HSTACK(CHOOSECOLS(sp, 1), CHOOSECOLS(sp, 2), IF(SEQUENCE(ROWS(sp))>0, "Spend"), CHOOSECOLS(sp, 3)),',
     '    comp,',
@@ -53,33 +64,27 @@ function configurarPace() {
   var saida = ss.getSheetByName(PACE.ABA_SAIDA);
   if (!cfg || !saida) throw new Error('Abas Config ou ' + PACE.ABA_SAIDA + ' não encontradas.');
 
-  var corte = cfg.getRange(PACE.CELULA_CORTE);
-  if (!corte.getValue()) {
-    cfg.getRange('A14').setValue('Base Irís a partir de');
-    var p = PACE.CORTE_PADRAO.split('-');
-    corte.setValue(new Date(+p[0], +p[1] - 1, +p[2])).setNumberFormat('dd/MM/yyyy');
+  if (!cfg.getRange('B14').getValue()) {
+    var c = PACE.CORTE_PADRAO;
+    cfg.getRange('A14:B14').setValues([['Base Irís a partir de', new Date(c[0], c[1] - 1, c[2])]]);
+    cfg.getRange('B14').setNumberFormat('dd/MM/yyyy');
+  }
+  if (!cfg.getRange('B15').getValue()) {
+    cfg.getRange('A15:B15').setValues([['Planilha da base Irís (URL)', PACE.URL_BASE]]);
+    cfg.getRange('C15').setFormula('=IFERROR(IMPORTRANGE(B15, "' + PACE.ABA_BASE + '!A1"), "Liberar acesso: clique aqui e em Permitir acesso")');
   }
 
   var atual = saida.getRange('A2').getFormula();
-  var nova = formulaPace_();
-  if (atual && atual !== nova && atual.indexOf('H_Iris') < 0) {
-    cfg.getRange('A16').setValue('Fórmula anterior de ' + PACE.ABA_SAIDA + '!A2 (backup)');
-    cfg.getRange(PACE.CELULA_BACKUP).setValue("'" + atual);
+  if (atual && atual.indexOf('IMPORTRANGE') < 0 && atual.indexOf('H_Iris') < 0) {
+    cfg.getRange('A16:B16').setValues([['Fórmula anterior de ' + PACE.ABA_SAIDA + '!A2 (backup)', "'" + atual]]);
   }
-  saida.getRange('A2').setFormula(nova);
-
-  [CFG.ABA_BASE, CFG.ABA_FUNIL, CFG.ABA_LOG].forEach(function (n) {
-    var sh = ss.getSheetByName(n);
-    if (sh && !sh.isSheetHidden()) sh.hideSheet();
-  });
-  logar_('PACE', 'ok', 0, 'Fórmula de ' + PACE.ABA_SAIDA + ' com corte em Config!' + PACE.CELULA_CORTE);
+  saida.getRange('A2').setFormula(formulaPace_());
 }
 
 /** Volta a fórmula anterior (backup em Config!B16). */
 function desfazerPace() {
   var ss = SpreadsheetApp.getActive();
-  var backup = String(ss.getSheetByName('Config').getRange(PACE.CELULA_BACKUP).getValue() || '');
-  if (backup.charAt(0) !== '=') throw new Error('Sem backup da fórmula em Config!' + PACE.CELULA_BACKUP);
+  var backup = String(ss.getSheetByName('Config').getRange('B16').getValue() || '');
+  if (backup.charAt(0) !== '=') throw new Error('Sem backup da fórmula em Config!B16');
   ss.getSheetByName(PACE.ABA_SAIDA).getRange('A2').setFormula(backup);
-  logar_('PACE', 'ok', 0, 'Fórmula anterior restaurada');
 }
